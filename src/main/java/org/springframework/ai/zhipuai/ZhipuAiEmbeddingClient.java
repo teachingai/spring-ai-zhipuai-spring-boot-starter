@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.*;
-import org.springframework.ai.mistralai.api.MistralAiApi;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.ai.zhipuai.api.ZhipuAiApi;
@@ -37,7 +36,7 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
 
     public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi, MetadataMode metadataMode) {
         this(zhipuAiApi, metadataMode,
-                ZhipuAiEmbeddingOptions.builder().withModel(MistralAiApi.EmbeddingModel.EMBED.getValue()).build(),
+                ZhipuAiEmbeddingOptions.builder().withModel(ZhipuAiApi.EmbeddingModel.EMBED.getValue()).build(),
                 RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 
