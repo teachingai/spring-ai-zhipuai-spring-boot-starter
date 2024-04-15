@@ -1,4 +1,0 @@
-spring:
-  datasource:
-    p6spy:
-      enabled: true

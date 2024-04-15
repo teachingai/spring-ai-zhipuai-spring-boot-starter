@@ -1,0 +1,24 @@
+package org.springframework.ai.zhipuai.aot;
+
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaOptions;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+
+import static org.springframework.ai.aot.AiRuntimeHints.findJsonAnnotatedClassesInPackage;
+
+public class ZhipuAiRuntimeHints implements RuntimeHintsRegistrar {
+
+    @Override
+    public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+        var mcs = MemberCategory.values();
+        for (var tr : findJsonAnnotatedClassesInPackage(OllamaApi.class)) {
+            hints.reflection().registerType(tr, mcs);
+        }
+        for (var tr : findJsonAnnotatedClassesInPackage(OllamaOptions.class)) {
+            hints.reflection().registerType(tr, mcs);
+        }
+    }
+
+}

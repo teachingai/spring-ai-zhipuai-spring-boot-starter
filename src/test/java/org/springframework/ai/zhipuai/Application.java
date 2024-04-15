@@ -13,33 +13,15 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.p6spy.spring.boot;
-
-import javax.sql.DataSource;
+package org.springframework.ai.zhipuai;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
-
-import com.p6spy.engine.spy.P6DriverManagerDataSource;
-import com.p6spy.spring.boot.ext.P6spyDataSource;
 
 @SpringBootApplication
 public class Application {
-	
-	@Bean
-	@P6spyDataSource
-	DataSource dataSource() {
-		
-		// just demo
-		P6DriverManagerDataSource ds =	new P6DriverManagerDataSource();
-		ds.setUrl("url");
-		ds.setUser("username");
-		ds.setPassword("password");
-		
-		return ds;
-	};
-	
+
+
 	public static void main(String[] args) throws Exception {
 		SpringApplication.run(Application.class, args);
 	}
