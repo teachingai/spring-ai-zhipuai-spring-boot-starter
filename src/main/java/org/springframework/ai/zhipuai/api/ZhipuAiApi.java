@@ -375,6 +375,7 @@ public class ZhipuAiApi {
             @JsonProperty("created") Long created,
             @JsonProperty("model") String model,
             @JsonProperty("choices") List<ChatCompletion.Choice> choices,
+            @JsonProperty("request_id") String requestId,
             @JsonProperty("usage") Usage usage) {
         // @formatter:on
 
@@ -414,6 +415,7 @@ public class ZhipuAiApi {
             @JsonProperty("object") String object,
             @JsonProperty("created") Long created,
             @JsonProperty("model") String model,
+            @JsonProperty("request_id") String requestId,
             @JsonProperty("choices") List<ChatCompletionChunk.ChunkChoice> choices) {
         // @formatter:on
 
@@ -542,7 +544,7 @@ public class ZhipuAiApi {
                     return !isInsideTool.get();
                 })
                 .concatMapIterable(window -> {
-                    Mono<ChatCompletionChunk> mono1 = window.reduce(new ChatCompletionChunk(null, null, null, null, null),
+                    Mono<ChatCompletionChunk> mono1 = window.reduce(new ChatCompletionChunk(null, null, null, null, null,null),
                             (previous, current) -> this.chunkMerger.merge(previous, current));
                     return List.of(mono1);
                 })

@@ -147,7 +147,7 @@ public class ZhipuAiChatClient
                 .map(cc -> new ZhipuAiApi.ChatCompletion.Choice(cc.index(), cc.delta(), cc.finishReason()))
                 .toList();
 
-        return new ZhipuAiApi.ChatCompletion(chunk.id(), "chat.completion", chunk.created(), chunk.model(), choices, null);
+        return new ZhipuAiApi.ChatCompletion(chunk.id(), "chat.completion", chunk.created(), chunk.model(), choices, chunk.requestId(),null);
     }
 
     /**
