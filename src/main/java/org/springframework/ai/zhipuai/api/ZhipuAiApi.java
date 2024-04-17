@@ -9,7 +9,6 @@ import org.springframework.ai.retry.RetryUtils;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.Assert;
 import org.springframework.web.client.ResponseErrorHandler;
@@ -27,7 +26,6 @@ import java.util.function.Predicate;
 public class ZhipuAiApi {
 
     private static final Logger logger = LoggerFactory.getLogger(ZhipuAiApi.class);
-    private final static String DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas";
     private static final Predicate<String> SSE_DONE_PREDICATE = "[DONE]"::equals;
     private static final String REQUEST_BODY_NULL_ERROR = "The request body can not be null.";
 
@@ -40,7 +38,7 @@ public class ZhipuAiApi {
      * @param apiKey ZhipuAI api Key.
      */
     public ZhipuAiApi(String apiKey) {
-        this(DEFAULT_BASE_URL, apiKey);
+        this(ApiUtils.DEFAULT_BASE_URL, apiKey);
     }
 
     /**
@@ -62,11 +60,7 @@ public class ZhipuAiApi {
     public ZhipuAiApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
                         ResponseErrorHandler responseErrorHandler) {
 
-        Consumer<HttpHeaders> jsonContentHeaders = headers -> {
-            headers.setBearerAuth(apiKey);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        };
+        Consumer<HttpHeaders> jsonContentHeaders = ApiUtils.getJsonContentHeaders(apiKey);
 
         this.restClient = restClientBuilder.baseUrl(baseUrl)
                 .defaultHeaders(jsonContentHeaders)
@@ -505,7 +499,7 @@ public class ZhipuAiApi {
         Assert.isTrue(!chatRequest.stream(), "Request must set the steam property to false.");
 
         return this.restClient.post()
-                .uri("/v4/chat/completions")
+                .uri("/api/paas/v4/chat/completions")
                 .body(chatRequest)
                 .retrieve()
                 .toEntity(ZhipuAiApi.ChatCompletion.class);
@@ -527,7 +521,7 @@ public class ZhipuAiApi {
         AtomicBoolean isInsideTool = new AtomicBoolean(false);
 
         return this.webClient.post()
-                .uri("/v4/chat/completions")
+                .uri("/api/paas/v4/chat/completions")
                 .body(Mono.just(chatRequest), ChatCompletionRequest.class)
                 .retrieve()
                 .bodyToFlux(String.class)
@@ -702,7 +696,7 @@ public class ZhipuAiApi {
         Assert.notNull(embeddingRequest.input(), "The input can not be null.");
 
         return this.restClient.post()
-                .uri("/v4/embeddings")
+                .uri("/api/paas/v4/embeddings")
                 .body(embeddingRequest)
                 .retrieve()
                 .onStatus(RetryUtils.DEFAULT_RESPONSE_ERROR_HANDLER)

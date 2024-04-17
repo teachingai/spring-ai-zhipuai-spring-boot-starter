@@ -13,6 +13,7 @@ import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.model.function.AbstractFunctionCallSupport;
 import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.ai.retry.RetryUtils;
+import org.springframework.ai.zhipuai.api.ApiUtils;
 import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.http.ResponseEntity;
@@ -41,8 +42,8 @@ public class ZhipuAiChatClient
 
     public ZhipuAiChatClient(ZhipuAiApi zhipuAiApi) {
         this(zhipuAiApi, ZhipuAiChatOptions.builder()
-                        .withTemperature(0.95f)
-                        .withTopP(0.7f)
+                        .withTemperature(ApiUtils.DEFAULT_TEMPERATURE)
+                        .withTopP(ApiUtils.DEFAULT_TOP_P)
                         .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
                         .build());
     }

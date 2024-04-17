@@ -35,8 +35,8 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
     }
 
     public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi, MetadataMode metadataMode) {
-        this(zhipuAiApi, metadataMode,
-                ZhipuAiEmbeddingOptions.builder().withModel(ZhipuAiApi.EmbeddingModel.EMBED.getValue()).build(),
+        this(zhipuAiApi, metadataMode, ZhipuAiEmbeddingOptions.builder()
+                        .withModel(ZhipuAiApi.EmbeddingModel.EMBED.getValue()).build(),
                 RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 

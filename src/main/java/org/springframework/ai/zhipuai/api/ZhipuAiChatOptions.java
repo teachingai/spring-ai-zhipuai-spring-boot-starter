@@ -19,8 +19,6 @@ import java.util.stream.Collectors;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
 
-    public static final Float DEFAULT_TEMPERATURE = 0.95f;
-
     /**
      * 模型输出最大 tokens，最大输出为8192，默认值为1024
      */
@@ -37,7 +35,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
      * 建议您根据应用场景调整 top_p 或 temperature 参数，但不要同时调整两个参数
      */
     @JsonProperty("temperature")
-    private Float temperature = DEFAULT_TEMPERATURE;
+    private Float temperature;
     /**
      * 用温度取样的另一种方法，称为核取样取值范围是：(0.0, 1.0) 开区间，不能等于 0 或 1，默认值为 0.7
      * 模型考虑具有 top_p 概率质量 tokens 的结果
