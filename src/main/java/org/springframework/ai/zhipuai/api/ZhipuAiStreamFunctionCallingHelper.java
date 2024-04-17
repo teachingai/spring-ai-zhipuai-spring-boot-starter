@@ -24,6 +24,7 @@ public class ZhipuAiStreamFunctionCallingHelper {
         String id = (current.id() != null ? current.id() : previous.id());
         Long created = (current.created() != null ? current.created() : previous.created());
         String model = (current.model() != null ? current.model() : previous.model());
+        String requestId = (current.requestId() != null ? current.requestId() : previous.requestId());
         String object = (current.object() != null ? current.object() : previous.object());
 
         ZhipuAiApi.ChatCompletionChunk.ChunkChoice previousChoice0 = (CollectionUtils.isEmpty(previous.choices()) ? null : previous.choices().get(0));
@@ -31,7 +32,7 @@ public class ZhipuAiStreamFunctionCallingHelper {
 
         ZhipuAiApi.ChatCompletionChunk.ChunkChoice choice = merge(previousChoice0, currentChoice0);
 
-        return new ZhipuAiApi.ChatCompletionChunk(id, object, created, model, List.of(choice));
+        return new ZhipuAiApi.ChatCompletionChunk(id, object, created, model, requestId, List.of(choice));
     }
 
     private ZhipuAiApi.ChatCompletionChunk.ChunkChoice merge(ZhipuAiApi.ChatCompletionChunk.ChunkChoice previous, ZhipuAiApi.ChatCompletionChunk.ChunkChoice current) {
