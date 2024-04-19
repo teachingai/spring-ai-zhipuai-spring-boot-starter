@@ -132,12 +132,12 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
         }
 
         public Builder withStop(List<String> stop) {
-            this.options.setStop(stop)
+            this.options.setStop(stop);
             return this;
         }
 
         public Builder withTools(List<ZhipuAiApi.FunctionTool> tools) {
-            this.options.setTools(tools)
+            this.options.setTools(tools);
             return this;
         }
 
