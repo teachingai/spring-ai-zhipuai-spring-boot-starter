@@ -3,6 +3,7 @@ package org.springframework.ai.zhipuai.api;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.ai.retry.RetryUtils;
+import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.Assert;
 import org.springframework.web.client.ResponseErrorHandler;

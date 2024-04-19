@@ -1,6 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
-import org.springframework.ai.zhipuai.api.ApiUtils;
+import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(ZhipuAiConnectionProperties.CONFIG_PREFIX)

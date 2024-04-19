@@ -2,6 +2,7 @@ package org.springframework.ai.zhipuai.autoconfigure;
 
 import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
+import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
@@ -10,11 +11,6 @@ public class ZhipuAiChatProperties {
 
     public static final String CONFIG_PREFIX = "spring.ai.zhipuai.chat";
 
-    public static final String DEFAULT_CHAT_MODEL = ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue();
-
-    private static final Float DEFAULT_TEMPERATURE = 0.95f;
-
-    private static final Float DEFAULT_TOP_P = 1.0f;
 
     /**
      * Enable ZhipuAi chat client.
@@ -28,9 +24,11 @@ public class ZhipuAiChatProperties {
      */
     @NestedConfigurationProperty
     private ZhipuAiChatOptions options = ZhipuAiChatOptions.builder()
-            .withModel(DEFAULT_CHAT_MODEL)
-            .withTemperature(DEFAULT_TEMPERATURE)
-            .withTopP(DEFAULT_TOP_P)
+            .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
+            .withMaxToken(ApiUtils.DEFAULT_MAX_TOKENS)
+            .withDoSample(Boolean.TRUE)
+            .withTemperature(ApiUtils.DEFAULT_TEMPERATURE)
+            .withTopP(ApiUtils.DEFAULT_TOP_P)
             .build();
 
     public ZhipuAiChatOptions getOptions() {

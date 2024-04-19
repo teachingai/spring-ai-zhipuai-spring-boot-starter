@@ -111,6 +111,11 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
+        public Builder withDoSample(Boolean doSample) {
+            this.options.setDoSample(doSample);
+            return this;
+        }
+
         public Builder withTemperature(Float temperature) {
             this.options.setTemperature(temperature);
             return this;
@@ -121,13 +126,23 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
+        public Builder withUser(String user) {
+            this.options.setUser(user);
+            return this;
+        }
+
+        public Builder withStop(List<String> stop) {
+            this.options.setStop(stop)
+            return this;
+        }
+
         public Builder withTools(List<ZhipuAiApi.FunctionTool> tools) {
-            this.options.tools = tools;
+            this.options.setTools(tools)
             return this;
         }
 
         public Builder withToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
-            this.options.toolChoice = toolChoice;
+            this.options.setToolChoice(toolChoice);
             return this;
         }
 
@@ -204,6 +219,22 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
 
     public String getModel() {
         return model;
+    }
+
+    public List<ZhipuAiApi.FunctionTool> getTools() {
+        return tools;
+    }
+
+    public void setTools(List<ZhipuAiApi.FunctionTool> tools) {
+        this.tools = tools;
+    }
+
+    public ZhipuAiApi.ChatCompletionRequest.ToolChoice getToolChoice() {
+        return toolChoice;
+    }
+
+    public void setToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
+        this.toolChoice = toolChoice;
     }
 
     /**

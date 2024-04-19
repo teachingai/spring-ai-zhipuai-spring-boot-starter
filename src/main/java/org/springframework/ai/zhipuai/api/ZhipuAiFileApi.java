@@ -3,6 +3,7 @@ package org.springframework.ai.zhipuai.api;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.ai.retry.RetryUtils;
+import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.http.*;
 import org.springframework.util.Assert;
 import org.springframework.util.LinkedMultiValueMap;
@@ -11,7 +12,6 @@ import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
