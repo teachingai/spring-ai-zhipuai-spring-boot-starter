@@ -1,5 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
+import org.springframework.ai.zhipuai.api.ApiUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(ZhipuAiConnectionProperties.CONFIG_PREFIX)
@@ -10,7 +11,7 @@ public class ZhipuAiConnectionProperties {
     /**
      * Base URL where 智普AI API server is running.
      */
-    private String baseUrl = "https://open.bigmodel.cn/api/paas";
+    private String baseUrl = ApiUtils.DEFAULT_BASE_URL;
 
     private String apiKey;
 
