@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 @ConfigurationProperties(ZhipuAiChatProperties.CONFIG_PREFIX)
-public class ZhipuAiChatProperties {
+public class ZhipuAiChatProperties extends ZhipuAiParentProperties {
 
     public static final String CONFIG_PREFIX = "spring.ai.zhipuai.chat";
 

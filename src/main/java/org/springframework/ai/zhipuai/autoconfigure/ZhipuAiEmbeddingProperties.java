@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 @ConfigurationProperties(ZhipuAiEmbeddingProperties.CONFIG_PREFIX)
-public class ZhipuAiEmbeddingProperties {
+public class ZhipuAiEmbeddingProperties extends ZhipuAiParentProperties {
 
     public static final String CONFIG_PREFIX = "spring.ai.zhipuai.embedding";
 
