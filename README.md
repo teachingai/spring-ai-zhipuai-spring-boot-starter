@@ -62,5 +62,5 @@ Spring Boot Starter For Spring AI Implementation Base On ZhiPu AI（ChatGLM）
 
 ### Sample
 
-使用示例请移步 [Spring AI Examples](https://github.com/TeachingAI/spring-ai-examples)
+使用示例请参见 [Spring AI Examples](https://github.com/TeachingAI/spring-ai-examples)
 
