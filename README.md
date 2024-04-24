@@ -7,8 +7,6 @@
 
 智谱AI 开放平台提供一系列具有不同功能和定价的大模型，包括通用大模型、超拟人大模型、图像大模型、向量大模型等，并且支持使用您的私有数据对模型进行微调。
 
-2024年01月16日，我们在「智谱AI技术开放日(ZHIPU DevDay)」推出新一代基座大模型 GLM-4。
-
 - 官网地址：[https://open.bigmodel.cn/](https://open.bigmodel.cn/)
 - API文档：[https://open.bigmodel.cn/dev/api](https://open.bigmodel.cn/dev/api)
 
