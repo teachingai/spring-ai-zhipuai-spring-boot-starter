@@ -29,6 +29,7 @@
 - 支持文本生成（Chat Completion API）
 - 支持多轮对话（Chat Completion API），支持返回流式输出结果
 - 支持函数调用（Function Calling）
+- 支持文本嵌入（Embeddings）
 - 支持图片生成（Image Generation API）
 
 #### 资源
