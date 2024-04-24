@@ -1,6 +1,5 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
-import org.springframework.ai.autoconfigure.mistralai.MistralAiEmbeddingProperties;
 import org.springframework.ai.autoconfigure.retry.SpringAiRetryAutoConfiguration;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
@@ -43,7 +42,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiChatClient zhipuAiChatClient(ZhipuAiApi zhipuAiApi,
                                                  ZhipuAiChatProperties chatProperties,
                                                  List<FunctionCallback> toolFunctionCallbacks,
@@ -57,7 +56,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = MistralAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(prefix = ZhipuAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiEmbeddingClient zhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi,
                                                          ZhipuAiEmbeddingProperties embeddingProperties,
                                                          RetryTemplate retryTemplate) {
