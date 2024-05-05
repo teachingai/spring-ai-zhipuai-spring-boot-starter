@@ -61,6 +61,19 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
     private String model;
 
     /**
+     * 可供模型调用的工具列表,tools 字段会计算 tokens ，同样受到 tokens 长度的限制
+     */
+    @NestedConfigurationProperty
+    private @JsonProperty("tools") List<ZhipuAiApi.FunctionTool> tools;
+
+    /**
+     * 用于控制模型是如何选择要调用的函数，仅当工具类型为function时补充。默认为auto，当前仅支持auto
+     */
+    @NestedConfigurationProperty
+    private @JsonProperty("tool_choice") ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice;
+
+
+    /**
      * ZhipuAI Tool Function Callbacks to register with the ChatClient. For Prompt Options
      * the functionCallbacks are automatically enabled for the duration of the prompt
      * execution. For Default Options the functionCallbacks are registered but disabled by
@@ -146,6 +159,16 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
 
         public Builder withStop(List<String> stop) {
             this.options.setStop(stop);
+            return this;
+        }
+
+        public Builder withTools(List<ZhipuAiApi.FunctionTool> tools) {
+            this.options.setTools(tools);
+            return this;
+        }
+
+        public Builder withToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
+            this.options.setToolChoice(toolChoice);
             return this;
         }
 
@@ -240,6 +263,23 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
     public String getModel() {
         return model;
     }
+
+    public List<ZhipuAiApi.FunctionTool> getTools() {
+        return tools;
+    }
+
+    public void setTools(List<ZhipuAiApi.FunctionTool> tools) {
+        this.tools = tools;
+    }
+
+    public ZhipuAiApi.ChatCompletionRequest.ToolChoice getToolChoice() {
+        return toolChoice;
+    }
+
+    public void setToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
+        this.toolChoice = toolChoice;
+    }
+
 
     /**
      * Convert the {@link ZhipuAiChatOptions} object to a {@link Map} of key/value pairs.
