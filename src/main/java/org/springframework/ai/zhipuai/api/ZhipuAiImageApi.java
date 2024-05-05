@@ -110,7 +110,7 @@ public class ZhipuAiImageApi {
         Assert.hasLength(imageRequest.prompt(), "Prompt cannot be empty.");
 
         return this.restClient.post()
-                .uri("/api/paas/v4/images/generations")
+                .uri("/v4/images/generations")
                 .body(imageRequest)
                 .retrieve()
                 .toEntity(ZhipuAiImageResponse.class);

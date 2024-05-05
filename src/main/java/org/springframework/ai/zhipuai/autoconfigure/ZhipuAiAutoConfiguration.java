@@ -5,8 +5,10 @@ import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.ai.zhipuai.ZhipuAiChatClient;
 import org.springframework.ai.zhipuai.ZhipuAiEmbeddingClient;
+import org.springframework.ai.zhipuai.ZhipuAiFileClient;
 import org.springframework.ai.zhipuai.ZhipuAiImageClient;
 import org.springframework.ai.zhipuai.api.ZhipuAiApi;
+import org.springframework.ai.zhipuai.api.ZhipuAiFileApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -57,6 +59,22 @@ public class ZhipuAiAutoConfiguration {
 
         RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable(() -> RetryTemplate.builder().build());
         return new ZhipuAiChatClient(zhipuAiApi, chatProperties.getOptions(), functionCallbackContext, retryTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled")
+    public ZhipuAiFileClient zhipuAiFileClient(ZhipuAiConnectionProperties connectionProperties,
+                                               RestClient.Builder restClientBuilder,
+                                               ResponseErrorHandler responseErrorHandler,
+                                               ObjectProvider<RetryTemplate> retryTemplateProvider) {
+
+        Assert.hasText(connectionProperties.getBaseUrl(), "ZhipuAI base URL must be set");
+        Assert.hasText(connectionProperties.getApiKey(), "ZhipuAI API key must be set");
+
+        ZhipuAiFileApi zhipuAiFileApi = new ZhipuAiFileApi(connectionProperties.getBaseUrl(), connectionProperties.getApiKey(), restClientBuilder, responseErrorHandler);
+        RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable(() -> RetryTemplate.builder().build());
+        return new ZhipuAiFileClient(zhipuAiFileApi, retryTemplate);
     }
 
     @Bean

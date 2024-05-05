@@ -91,7 +91,7 @@ public class ZhipuAiFileApi {
      */
     public ResponseEntity<ZhipuAiFileResponse> listFile() {
         return this.restClient.get()
-                .uri("/api/paas/v4/files")
+                .uri("/v4/files")
                 .retrieve()
                 .toEntity(ZhipuAiFileResponse.class);
     }
@@ -126,7 +126,7 @@ public class ZhipuAiFileApi {
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
         return this.restClient.post()
-                .uri("/api/paas/v4/files")
+                .uri("/v4/files")
                 .body(requestEntity)
                 .retrieve()
                 .toEntity(ZhipuAiFileResponse.Data.class);

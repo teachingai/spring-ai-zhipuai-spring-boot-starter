@@ -6,7 +6,7 @@ import org.springframework.http.MediaType;
 import java.util.function.Consumer;
 
 public class ApiUtils {
-    public final static String DEFAULT_BASE_URL = "https://open.bigmodel.cn";
+    public final static String DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas";
 
     public static final Integer DEFAULT_MAX_TOKENS = 1024;
 

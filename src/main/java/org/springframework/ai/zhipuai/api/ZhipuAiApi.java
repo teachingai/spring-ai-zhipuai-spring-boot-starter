@@ -502,7 +502,7 @@ public class ZhipuAiApi {
         Assert.isTrue(!chatRequest.stream(), "Request must set the steam property to false.");
 
         return this.restClient.post()
-                .uri("/api/paas/v4/chat/completions")
+                .uri("/v4/chat/completions")
                 .body(chatRequest)
                 .retrieve()
                 .toEntity(ZhipuAiApi.ChatCompletion.class);
@@ -524,7 +524,7 @@ public class ZhipuAiApi {
         AtomicBoolean isInsideTool = new AtomicBoolean(false);
 
         return this.webClient.post()
-                .uri("/api/paas/v4/chat/completions")
+                .uri("/v4/chat/completions")
                 .body(Mono.just(chatRequest), ChatCompletionRequest.class)
                 .retrieve()
                 .bodyToFlux(String.class)
@@ -699,7 +699,7 @@ public class ZhipuAiApi {
         Assert.notNull(embeddingRequest.input(), "The input can not be null.");
 
         return this.restClient.post()
-                .uri("/api/paas/v4/embeddings")
+                .uri("/v4/embeddings")
                 .body(embeddingRequest)
                 .retrieve()
                 .onStatus(RetryUtils.DEFAULT_RESPONSE_ERROR_HANDLER)
