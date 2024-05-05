@@ -10,10 +10,9 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallingOptions;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.util.Assert;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -62,35 +61,49 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
     private String model;
 
     /**
-     * 可供模型调用的工具列表,tools 字段会计算 tokens ，同样受到 tokens 长度的限制
+     * ZhipuAI Tool Function Callbacks to register with the ChatClient. For Prompt Options
+     * the functionCallbacks are automatically enabled for the duration of the prompt
+     * execution. For Default Options the functionCallbacks are registered but disabled by
+     * default. Use the enableFunctions to set the functions from the registry to be used
+     * by the ChatClient chat completion requests.
      */
     @NestedConfigurationProperty
-    private @JsonProperty("tools") List<ZhipuAiApi.FunctionTool> tools;
+    @JsonIgnore
+    private List<FunctionCallback> functionCallbacks = new ArrayList<>();
 
     /**
-     * 用于控制模型是如何选择要调用的函数，仅当工具类型为function时补充。默认为auto，当前仅支持auto
+     * List of functions, identified by their names, to configure for function calling in
+     * the chat completion requests. Functions with those names must exist in the
+     * functionCallbacks registry. The {@link #functionCallbacks} from the PromptOptions
+     * are automatically enabled for the duration of the prompt execution.
+     *
+     * Note that function enabled with the default options are enabled for all chat
+     * completion requests. This could impact the token count and the billing. If the
+     * functions is set in a prompt options, then the enabled functions are only active
+     * for the duration of this prompt execution.
      */
     @NestedConfigurationProperty
-    private @JsonProperty("tool_choice") ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice;
+    @JsonIgnore
+    private Set<String> functions = new HashSet<>();
 
     @Override
     public List<FunctionCallback> getFunctionCallbacks() {
-        return null;
+        return this.functionCallbacks;
     }
 
     @Override
     public void setFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
-
+        this.functionCallbacks = functionCallbacks;
     }
 
     @Override
     public Set<String> getFunctions() {
-        return null;
+        return this.functions;
     }
 
     @Override
     public void setFunctions(Set<String> functions) {
-
+        this.functions = functions;
     }
 
     public static Builder builder() {
@@ -136,13 +149,20 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
-        public Builder withTools(List<ZhipuAiApi.FunctionTool> tools) {
-            this.options.setTools(tools);
+        public Builder withFunctionCallbacks(List<FunctionCallback> functionCallbacks) {
+            this.options.functionCallbacks = functionCallbacks;
             return this;
         }
 
-        public Builder withToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
-            this.options.setToolChoice(toolChoice);
+        public Builder withFunctions(Set<String> functionNames) {
+            Assert.notNull(functionNames, "Function names must not be null");
+            this.options.functions = functionNames;
+            return this;
+        }
+
+        public Builder withFunction(String functionName) {
+            Assert.hasText(functionName, "Function name must not be empty");
+            this.options.functions.add(functionName);
             return this;
         }
 
@@ -221,22 +241,6 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
         return model;
     }
 
-    public List<ZhipuAiApi.FunctionTool> getTools() {
-        return tools;
-    }
-
-    public void setTools(List<ZhipuAiApi.FunctionTool> tools) {
-        this.tools = tools;
-    }
-
-    public ZhipuAiApi.ChatCompletionRequest.ToolChoice getToolChoice() {
-        return toolChoice;
-    }
-
-    public void setToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
-        this.toolChoice = toolChoice;
-    }
-
     /**
      * Convert the {@link ZhipuAiChatOptions} object to a {@link Map} of key/value pairs.
      * @return The {@link Map} of key/value pairs.
@@ -270,6 +274,8 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
                 .filter(e -> !e.getKey().equals("model"))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
+
+
 
 
 }

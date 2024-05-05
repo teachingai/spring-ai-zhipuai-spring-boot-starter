@@ -38,7 +38,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled")
+    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiChatClient zhipuAiChatClient(ZhipuAiConnectionProperties connectionProperties,
                                                ZhipuAiChatProperties chatProperties,
                                                List<FunctionCallback> toolFunctionCallbacks,
@@ -63,7 +63,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled")
+    @ConditionalOnProperty(prefix = ZhipuAiChatProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiFileClient zhipuAiFileClient(ZhipuAiConnectionProperties connectionProperties,
                                                RestClient.Builder restClientBuilder,
                                                ResponseErrorHandler responseErrorHandler,
@@ -79,7 +79,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = ZhipuAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled")
+    @ConditionalOnProperty(prefix = ZhipuAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiEmbeddingClient zhipuAiEmbeddingClient(ZhipuAiConnectionProperties connectionProperties,
                                                          ZhipuAiEmbeddingProperties embeddingProperties,
                                                          RestClient.Builder restClientBuilder,
@@ -99,7 +99,7 @@ public class ZhipuAiAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = ZhipuAiImageProperties.CONFIG_PREFIX, name = "enabled")
+    @ConditionalOnProperty(prefix = ZhipuAiImageProperties.CONFIG_PREFIX, name = "enabled", havingValue = "true")
     public ZhipuAiImageClient zhipuAiImageClient(ZhipuAiConnectionProperties connectionProperties,
                                                  ZhipuAiImageProperties imageProperties,
                                                  RestClient.Builder restClientBuilder,
