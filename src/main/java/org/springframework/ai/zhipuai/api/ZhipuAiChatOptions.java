@@ -132,7 +132,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
-        public Builder withMaxToken(Integer maxTokens) {
+        public Builder withMaxTokens(Integer maxTokens) {
             this.options.setMaxTokens(maxTokens);
             return this;
         }

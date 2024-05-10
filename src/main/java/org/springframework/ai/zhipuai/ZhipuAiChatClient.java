@@ -43,7 +43,7 @@ public class ZhipuAiChatClient
     public ZhipuAiChatClient(ZhipuAiApi zhipuAiApi) {
         this(zhipuAiApi, ZhipuAiChatOptions.builder()
                         .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
-                        .withMaxToken(ApiUtils.DEFAULT_MAX_TOKENS)
+                        .withMaxTokens(ApiUtils.DEFAULT_MAX_TOKENS)
                         .withDoSample(Boolean.TRUE)
                         .withTemperature(ApiUtils.DEFAULT_TEMPERATURE)
                         .withTopP(ApiUtils.DEFAULT_TOP_P)

@@ -1,6 +1,6 @@
 # spring-ai-zhipuai-spring-boot-starter
 
-> 基于 [智普AI](https://open.bigmodel.cn/) 的 ChatGLM 模型 和 Spring AI 的 Spring Boot Starter 实现
+> 基于 [智谱AI大模型MaaS开放平台](https://open.bigmodel.cn/) 和 Spring AI 的 Spring Boot Starter 实现
 
 ### 智普AI
 
