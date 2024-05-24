@@ -15,37 +15,37 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 
-public class ZhipuAiFileApi {
+public class ZhipuAiFineTuningApi {
 
     private final RestClient restClient;
 
     /**
-     * Create a new ZhipuAI File api with base URL set to https://api.moonshot.cn
+     * Create a new ZhipuAI Fine-Tuning api with base URL set to https://open.bigmodel.cn/api/paas
      * @param apiKey ZhipuAI apiKey.
      */
-    public ZhipuAiFileApi(String apiKey) {
+    public ZhipuAiFineTuningApi(String apiKey) {
         this(ApiUtils.DEFAULT_BASE_URL, apiKey, RestClient.builder());
     }
 
     /**
-     * Create a new ZhipuAI File API with the provided base URL.
+     * Create a new ZhipuAI Fine-Tuning API with the provided base URL.
      * @param baseUrl the base URL for the ZhipuAI API.
      * @param apiKey ZhipuAI apiKey.
      * @param restClientBuilder the rest client builder to use.
      */
-    public ZhipuAiFileApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder) {
+    public ZhipuAiFineTuningApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder) {
         this(baseUrl, apiKey, restClientBuilder, RetryUtils.DEFAULT_RESPONSE_ERROR_HANDLER);
     }
 
     /**
-     * Create a new ZhipuAI File API with the provided base URL.
+     * Create a new ZhipuAI Fine-Tuning API with the provided base URL.
      * @param baseUrl the base URL for the ZhipuAI API.
      * @param apiKey ZhipuAI apiKey.
      * @param restClientBuilder the rest client builder to use.
      * @param responseErrorHandler the response error handler to use.
      */
-    public ZhipuAiFileApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
-                          ResponseErrorHandler responseErrorHandler) {
+    public ZhipuAiFineTuningApi(String baseUrl, String apiKey, RestClient.Builder restClientBuilder,
+                                ResponseErrorHandler responseErrorHandler) {
 
         this.restClient = restClientBuilder.baseUrl(baseUrl)
                 .defaultHeaders(ApiUtils.getJsonContentHeaders(apiKey))

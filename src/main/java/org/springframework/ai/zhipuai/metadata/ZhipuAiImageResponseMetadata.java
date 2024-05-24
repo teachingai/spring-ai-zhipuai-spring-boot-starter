@@ -1,5 +1,6 @@
 package org.springframework.ai.zhipuai.metadata;
 
+import com.zhipu.oapi.service.v4.image.ImageResult;
 import org.springframework.ai.image.ImageResponseMetadata;
 import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.util.Assert;
@@ -10,9 +11,9 @@ public class ZhipuAiImageResponseMetadata implements ImageResponseMetadata {
 
     private final Long created;
 
-    public static ZhipuAiImageResponseMetadata from(ZhipuAiImageApi.ZhipuAiImageResponse ZhipuAiImageResponse) {
-        Assert.notNull(ZhipuAiImageResponse, "ZhipuAiImageResponse must not be null");
-        return new ZhipuAiImageResponseMetadata(ZhipuAiImageResponse.created());
+    public static ZhipuAiImageResponseMetadata from(ImageResult imageResult) {
+        Assert.notNull(imageResult, "ImageResult must not be null");
+        return new ZhipuAiImageResponseMetadata(imageResult.getCreated());
     }
 
     protected ZhipuAiImageResponseMetadata(Long created) {

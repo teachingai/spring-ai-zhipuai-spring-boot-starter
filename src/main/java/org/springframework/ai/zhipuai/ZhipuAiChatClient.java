@@ -1,7 +1,11 @@
 package org.springframework.ai.zhipuai;
 
 import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.zhipu.oapi.ClientV4;
 import com.zhipu.oapi.Constants;
 import com.zhipu.oapi.service.v4.model.*;
@@ -44,14 +48,23 @@ public class ZhipuAiChatClient
      */
     private ZhipuAiChatOptions defaultOptions;
     /**
-     * Low-level 智普 API library.
+     * 智普 SDK library.
      */
     private final ClientV4 zhipuClient;
     private final RetryTemplate retryTemplate;
+    private static final ObjectMapper OBJECT_MAPPER = defaultObjectMapper();
+
+    public static ObjectMapper defaultObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE);
+        return mapper;
+    }
 
     public ZhipuAiChatClient(ClientV4 zhipuClient) {
         this(zhipuClient, ZhipuAiChatOptions.builder()
-                        .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
+                        .withModel(Constants.ModelChatGLM3TURBO)
                         .withMaxToken(ApiUtils.DEFAULT_MAX_TOKENS)
                         .withDoSample(Boolean.TRUE)
                         .withTemperature(ApiUtils.DEFAULT_TEMPERATURE)
@@ -74,14 +87,14 @@ public class ZhipuAiChatClient
         this.retryTemplate = retryTemplate;
     }
 
-
     @Override
     public ChatResponse call(Prompt prompt) {
-
-        var request = createRequest(prompt, false, Constants.invokeMethodAsync);
-
+        // 1、创建请求
+        String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
+        var request = this.createRequest(prompt, requestId, false, Constants.invokeMethodAsync);
+        // 2、执行请求
         return retryTemplate.execute(ctx -> {
-
+            // 3、调用智能聊天接口
             ResponseEntity<ModelApiResponse> completionEntity = this.callWithFunctionSupport(request);
 
             var chatCompletion = completionEntity.getBody();
@@ -116,9 +129,12 @@ public class ZhipuAiChatClient
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
-        var request = createRequest(prompt, true, Constants.invokeMethod);
+        // 1、创建请求
+        String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
+        var request = this.createRequest(prompt, requestId, true, Constants.invokeMethod);
+        // 2、执行请求
         return retryTemplate.execute(ctx -> {
-
+            // 3、调用智能聊天接口
             var completionChunks = this.zhipuClient.invokeModelApi(request);
             if (completionChunks.isSuccess()) {
                 AtomicBoolean isFirst = new AtomicBoolean(true);
@@ -129,7 +145,7 @@ public class ZhipuAiChatClient
                                     System.out.print("Response: ");
                                 }
                                 if (accumulator.getDelta() != null && accumulator.getDelta().getTool_calls() != null) {
-                                    String jsonString = mapper.writeValueAsString(accumulator.getDelta().getTool_calls());
+                                    String jsonString = OBJECT_MAPPER.writeValueAsString(accumulator.getDelta().getTool_calls());
                                     System.out.println("tool_calls: " + jsonString);
                                 }
                                 if (accumulator.getDelta() != null && accumulator.getDelta().getContent() != null) {
@@ -201,9 +217,7 @@ public class ZhipuAiChatClient
     /**
      * Accessible for testing.
      */
-    ChatCompletionRequest createRequest(Prompt prompt, boolean stream, String invokeMethod) {
-
-        String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
+    ChatCompletionRequest createRequest(Prompt prompt, String requestId, boolean stream, String invokeMethod) {
 
         Set<String> functionsForThisRequest = new HashSet<>();
 
@@ -212,46 +226,41 @@ public class ZhipuAiChatClient
                 .map(m -> new ChatMessage(m.getMessageType().name(), m.getContent()))
                 .toList();
 
-        var request = ChatCompletionRequest.builder()
+        var chatCompletionRequest = ChatCompletionRequest.builder()
                 .model(Constants.ModelChatGLM3TURBO)
                 .stream(stream)
                 .invokeMethod(invokeMethod)
                 .messages(chatCompletionMessages)
                 .requestId(requestId)
+                .toolChoice("auto")
                 .build();
 
+        // Add the default enabled functions to the request's tools parameter.
         if (this.defaultOptions != null) {
-            Set<String> defaultEnabledFunctions = this.handleFunctionCallbackConfigurations(this.defaultOptions,
-                    !IS_RUNTIME_CALL);
-
+            Set<String> defaultEnabledFunctions = super.handleFunctionCallbackConfigurations(this.defaultOptions, !IS_RUNTIME_CALL);
             functionsForThisRequest.addAll(defaultEnabledFunctions);
-
-            request = ModelOptionsUtils.merge(request, this.defaultOptions, ChatCompletionRequest.class);
+            chatCompletionRequest = ModelOptionsUtils.merge(chatCompletionRequest, this.defaultOptions, ChatCompletionRequest.class);
         }
-
+        // Add the prompt enabled functions to the request's tools parameter.
         if (prompt.getOptions() != null) {
             if (prompt.getOptions() instanceof ChatOptions runtimeOptions) {
-                var updatedRuntimeOptions = ModelOptionsUtils.copyToTarget(runtimeOptions, ChatOptions.class, ZhipuAiChatOptions.class);
 
+                var updatedRuntimeOptions = ModelOptionsUtils.copyToTarget(runtimeOptions, ChatOptions.class, ZhipuAiChatOptions.class);
                 Set<String> promptEnabledFunctions = this.handleFunctionCallbackConfigurations(updatedRuntimeOptions, IS_RUNTIME_CALL);
                 functionsForThisRequest.addAll(promptEnabledFunctions);
-
-                request = ModelOptionsUtils.merge(updatedRuntimeOptions, request, ChatCompletionRequest.class);
-            }
-            else {
+                chatCompletionRequest = ModelOptionsUtils.merge(updatedRuntimeOptions, chatCompletionRequest, ChatCompletionRequest.class);
+            } else {
                 throw new IllegalArgumentException("Prompt options are not of type ChatOptions: " + prompt.getOptions().getClass().getSimpleName());
             }
         }
-
         // Add the enabled functions definitions to the request's tools parameter.
         if (!CollectionUtils.isEmpty(functionsForThisRequest)) {
-
-            request = ModelOptionsUtils.merge(
+            chatCompletionRequest = ModelOptionsUtils.merge(
                     ZhipuAiChatOptions.builder().withTools(this.getFunctionTools(functionsForThisRequest)).build(),
-                    request, ChatCompletionRequest.class);
+                    chatCompletionRequest, ChatCompletionRequest.class);
         }
 
-        return request;
+        return chatCompletionRequest;
     }
 
     private List<ToolCalls> getFunctionTools(Set<String> functionNames) {

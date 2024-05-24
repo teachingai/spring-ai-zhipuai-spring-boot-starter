@@ -89,7 +89,7 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
                 logger.warn("No embeddings returned for request: {}", request);
                 return new EmbeddingResponse(List.of());
             }
-            if (apiEmbeddingResponse.isSuccess()) {
+            if (!apiEmbeddingResponse.isSuccess()) {
                 logger.error("embeddings error for request，code : {}，error : {}", apiEmbeddingResponse.getCode(), apiEmbeddingResponse.getMsg());
                 return new EmbeddingResponse(List.of());
             }

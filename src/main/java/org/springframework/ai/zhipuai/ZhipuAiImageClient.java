@@ -1,43 +1,46 @@
 package org.springframework.ai.zhipuai;
 
+import com.zhipu.oapi.ClientV4;
+import com.zhipu.oapi.Constants;
+import com.zhipu.oapi.service.v4.image.CreateImageRequest;
+import com.zhipu.oapi.service.v4.image.ImageApiResponse;
+import com.zhipu.oapi.service.v4.image.ImageResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.image.*;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.retry.RetryUtils;
-import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiImageOptions;
 import org.springframework.ai.zhipuai.metadata.ZhipuAiImageGenerationMetadata;
 import org.springframework.ai.zhipuai.metadata.ZhipuAiImageResponseMetadata;
-import org.springframework.http.ResponseEntity;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 
 public class ZhipuAiImageClient implements ImageClient {
 
     private final static Logger logger = LoggerFactory.getLogger(ZhipuAiImageClient.class);
-    private final static ZhipuAiImageGenerationMetadata DEFAULT_METADATA =  new ZhipuAiImageGenerationMetadata("");
 
     private ZhipuAiImageOptions defaultOptions;
 
-    private final ZhipuAiImageApi zhipuAiImageApi;
+    private final ClientV4 zhipuClient;
 
     public final RetryTemplate retryTemplate;
 
-    public ZhipuAiImageClient(ZhipuAiImageApi zhipuAiImageApi) {
-        this(zhipuAiImageApi, ZhipuAiImageOptions.builder()
-                .withModel(ZhipuAiImageApi.DEFAULT_IMAGE_MODEL)
+    public ZhipuAiImageClient(ClientV4 zhipuClient) {
+        this(zhipuClient, ZhipuAiImageOptions.builder()
+                .withModel(Constants.ModelCogView)
                 .build(), RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 
-    public ZhipuAiImageClient(ZhipuAiImageApi zhipuAiImageApi, ZhipuAiImageOptions defaultOptions,
+    public ZhipuAiImageClient(ClientV4 zhipuClient, ZhipuAiImageOptions defaultOptions,
                               RetryTemplate retryTemplate) {
-        Assert.notNull(zhipuAiImageApi, "ZhipuAiImageApi must not be null");
+        Assert.notNull(zhipuClient, "ClientV4 must not be null");
         Assert.notNull(defaultOptions, "defaultOptions must not be null");
         Assert.notNull(retryTemplate, "retryTemplate must not be null");
-        this.zhipuAiImageApi = zhipuAiImageApi;
+        this.zhipuClient = zhipuClient;
         this.defaultOptions = defaultOptions;
         this.retryTemplate = retryTemplate;
     }
@@ -50,42 +53,46 @@ public class ZhipuAiImageClient implements ImageClient {
     public ImageResponse call(ImagePrompt imagePrompt) {
         return this.retryTemplate.execute(ctx -> {
 
-            String instructions = imagePrompt.getInstructions().get(0).getText();
-            ZhipuAiImageApi.ZhipuAiImageRequest imageRequest = new ZhipuAiImageApi.ZhipuAiImageRequest(instructions,
-                    ZhipuAiImageApi.DEFAULT_IMAGE_MODEL);
+            var inputContent = CollectionUtils.firstElement(imagePrompt.getInstructions());
+            CreateImageRequest imageRequest = new CreateImageRequest();
+            imageRequest.setPrompt(inputContent.getText());
 
             if (this.defaultOptions != null) {
-                imageRequest = ModelOptionsUtils.merge(this.defaultOptions, imageRequest,
-                        ZhipuAiImageApi.ZhipuAiImageRequest.class);
+                imageRequest = ModelOptionsUtils.merge(this.defaultOptions, imageRequest, CreateImageRequest.class);
             }
 
             if (imagePrompt.getOptions() != null) {
                 imageRequest = ModelOptionsUtils.merge(toZhipuAiImageOptions(imagePrompt.getOptions()), imageRequest,
-                        ZhipuAiImageApi.ZhipuAiImageRequest.class);
+                        CreateImageRequest.class);
             }
 
-            // Make the request
-            ResponseEntity<ZhipuAiImageApi.ZhipuAiImageResponse> imageResponseEntity = this.zhipuAiImageApi
-                    .createImage(imageRequest);
+            ImageApiResponse imageApiResponse = zhipuClient.createImage(imageRequest);
 
             // Convert to org.springframework.ai.model derived ImageResponse data type
-            return convertResponse(imageResponseEntity, imageRequest);
+            return convertResponse(imageApiResponse, imageRequest);
         });
     }
 
-    private ImageResponse convertResponse(ResponseEntity<ZhipuAiImageApi.ZhipuAiImageResponse> imageResponseEntity,
-                                          ZhipuAiImageApi.ZhipuAiImageRequest ZhipuAiImageRequest) {
-        ZhipuAiImageApi.ZhipuAiImageResponse imageApiResponse = imageResponseEntity.getBody();
+    private ImageResponse convertResponse(ImageApiResponse imageApiResponse,
+                                          CreateImageRequest imageRequest) {
         if (imageApiResponse == null) {
-            logger.warn("No image response returned for request: {}", ZhipuAiImageRequest);
+            logger.warn("No image response returned for request: {}", imageRequest);
             return new ImageResponse(List.of());
         }
+        if (!imageApiResponse.isSuccess()) {
+            logger.error("Create Image error for request，code : {}，error : {}", imageApiResponse.getCode(), imageApiResponse.getMsg());
+            return new ImageResponse(List.of());
+        }
+        ImageResult imageResult = imageApiResponse.getData();
+        if (imageResult == null) {
+            logger.warn("No image response returned for request: {}", imageRequest);
+            return new ImageResponse(List.of());
+        }
+        List<ImageGeneration> imageGenerationList = imageResult.getData().stream()
+                .map(entry -> new ImageGeneration(new Image(entry.getUrl(), entry.getB64Json()), new ZhipuAiImageGenerationMetadata(entry.getRevisedPrompt())))
+                .toList();
 
-        List<ImageGeneration> imageGenerationList = imageApiResponse.data().stream().map(entry -> {
-            return new ImageGeneration(new Image(entry.url(), null), DEFAULT_METADATA);
-        }).toList();
-
-        ImageResponseMetadata imageResponseMetadata = ZhipuAiImageResponseMetadata.from(imageApiResponse);
+        ImageResponseMetadata imageResponseMetadata = ZhipuAiImageResponseMetadata.from(imageResult);
         return new ImageResponse(imageGenerationList, imageResponseMetadata);
     }
 
@@ -95,39 +102,39 @@ public class ZhipuAiImageClient implements ImageClient {
      * @return the converted {@link ZhipuAiImageOptions}.
      */
     private ZhipuAiImageOptions toZhipuAiImageOptions(ImageOptions runtimeImageOptions) {
-        ZhipuAiImageOptions.Builder ZhipuAiImageOptionsBuilder = ZhipuAiImageOptions.builder();
+        ZhipuAiImageOptions.Builder builder = ZhipuAiImageOptions.builder();
         if (runtimeImageOptions != null) {
             // Handle portable image options
             if (runtimeImageOptions.getN() != null) {
-                ZhipuAiImageOptionsBuilder.withN(runtimeImageOptions.getN());
+                builder.withN(runtimeImageOptions.getN());
             }
             if (runtimeImageOptions.getModel() != null) {
-                ZhipuAiImageOptionsBuilder.withModel(runtimeImageOptions.getModel());
+                builder.withModel(runtimeImageOptions.getModel());
             }
             if (runtimeImageOptions.getResponseFormat() != null) {
-                ZhipuAiImageOptionsBuilder.withResponseFormat(runtimeImageOptions.getResponseFormat());
+                builder.withResponseFormat(runtimeImageOptions.getResponseFormat());
             }
             if (runtimeImageOptions.getWidth() != null) {
-                ZhipuAiImageOptionsBuilder.withWidth(runtimeImageOptions.getWidth());
+                builder.withWidth(runtimeImageOptions.getWidth());
             }
             if (runtimeImageOptions.getHeight() != null) {
-                ZhipuAiImageOptionsBuilder.withHeight(runtimeImageOptions.getHeight());
+                builder.withHeight(runtimeImageOptions.getHeight());
             }
             // Handle ZhipuAI specific image options
             if (runtimeImageOptions instanceof ZhipuAiImageOptions) {
                 ZhipuAiImageOptions runtimeZhipuAiImageOptions = (ZhipuAiImageOptions) runtimeImageOptions;
                 if (runtimeZhipuAiImageOptions.getQuality() != null) {
-                    ZhipuAiImageOptionsBuilder.withQuality(runtimeZhipuAiImageOptions.getQuality());
+                    builder.withQuality(runtimeZhipuAiImageOptions.getQuality());
                 }
                 if (runtimeZhipuAiImageOptions.getStyle() != null) {
-                    ZhipuAiImageOptionsBuilder.withStyle(runtimeZhipuAiImageOptions.getStyle());
+                    builder.withStyle(runtimeZhipuAiImageOptions.getStyle());
                 }
                 if (runtimeZhipuAiImageOptions.getUser() != null) {
-                    ZhipuAiImageOptionsBuilder.withUser(runtimeZhipuAiImageOptions.getUser());
+                    builder.withUser(runtimeZhipuAiImageOptions.getUser());
                 }
             }
         }
-        return ZhipuAiImageOptionsBuilder.build();
+        return builder.build();
     }
 
 }

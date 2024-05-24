@@ -1,5 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
+import com.zhipu.oapi.Constants;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.zhipuai.api.ZhipuAiEmbeddingOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -9,8 +10,6 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public class ZhipuAiEmbeddingProperties extends ZhipuAiParentProperties {
 
     public static final String CONFIG_PREFIX = "spring.ai.zhipuai.embedding";
-
-    public static final String DEFAULT_EMBEDDING_MODEL = ZhipuAiApi.EmbeddingModel.EMBED.getValue();
 
     /**
      * Enable 智普AI embedding client.
@@ -26,7 +25,7 @@ public class ZhipuAiEmbeddingProperties extends ZhipuAiParentProperties {
      */
     @NestedConfigurationProperty
     private ZhipuAiEmbeddingOptions options = ZhipuAiEmbeddingOptions.builder()
-            .withModel(DEFAULT_EMBEDDING_MODEL)
+            .withModel(Constants.ModelEmbedding2)
             .build();
 
     public ZhipuAiEmbeddingOptions getOptions() {
