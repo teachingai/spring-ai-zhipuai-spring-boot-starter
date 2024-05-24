@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class V4Test {
 
     private final static Logger logger = LoggerFactory.getLogger(V4Test.class);
-    private static final String API_SECRET_KEY = "0952e947af29a0b8d3bfbb417a093c9e.J1zq9XBZDkUnIGPm";
+    private static final String API_SECRET_KEY = "";
     private static final boolean devMode = false;
 
 
