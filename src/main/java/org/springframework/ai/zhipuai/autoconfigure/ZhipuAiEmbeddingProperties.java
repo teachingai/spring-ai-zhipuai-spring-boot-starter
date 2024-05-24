@@ -1,7 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
 import org.springframework.ai.document.MetadataMode;
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiEmbeddingOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zhipu.oapi.service.v4.model.ToolCalls;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallingOptions;
@@ -65,13 +66,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
      * 可供模型调用的工具列表,tools 字段会计算 tokens ，同样受到 tokens 长度的限制
      */
     @NestedConfigurationProperty
-    private @JsonProperty("tools") List<ZhipuAiApi.FunctionTool> tools;
-
-    /**
-     * 用于控制模型是如何选择要调用的函数，仅当工具类型为function时补充。默认为auto，当前仅支持auto
-     */
-    @NestedConfigurationProperty
-    private @JsonProperty("tool_choice") ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice;
+    private @JsonProperty("tools") List<ToolCalls> tools;
 
     @Override
     public List<FunctionCallback> getFunctionCallbacks() {
@@ -136,13 +131,8 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
-        public Builder withTools(List<ZhipuAiApi.FunctionTool> tools) {
+        public Builder withTools(List<ToolCalls> tools) {
             this.options.setTools(tools);
-            return this;
-        }
-
-        public Builder withToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
-            this.options.setToolChoice(toolChoice);
             return this;
         }
 
@@ -221,20 +211,12 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
         return model;
     }
 
-    public List<ZhipuAiApi.FunctionTool> getTools() {
+    public List<ToolCalls> getTools() {
         return tools;
     }
 
-    public void setTools(List<ZhipuAiApi.FunctionTool> tools) {
+    public void setTools(List<ToolCalls> tools) {
         this.tools = tools;
-    }
-
-    public ZhipuAiApi.ChatCompletionRequest.ToolChoice getToolChoice() {
-        return toolChoice;
-    }
-
-    public void setToolChoice(ZhipuAiApi.ChatCompletionRequest.ToolChoice toolChoice) {
-        this.toolChoice = toolChoice;
     }
 
     /**

@@ -1,6 +1,5 @@
 package org.springframework.ai.zhipuai.aot;
 
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;

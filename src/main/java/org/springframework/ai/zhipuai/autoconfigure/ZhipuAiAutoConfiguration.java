@@ -1,12 +1,13 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
+import com.zhipu.oapi.ClientV4;
+import com.zhipu.oapi.core.cache.ICache;
 import org.springframework.ai.autoconfigure.retry.SpringAiRetryAutoConfiguration;
 import org.springframework.ai.model.function.FunctionCallback;
 import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.ai.zhipuai.ZhipuAiChatClient;
 import org.springframework.ai.zhipuai.ZhipuAiEmbeddingClient;
 import org.springframework.ai.zhipuai.ZhipuAiImageClient;
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -31,7 +32,7 @@ import java.util.List;
  */
 @AutoConfiguration(after = { RestClientAutoConfiguration.class, SpringAiRetryAutoConfiguration.class })
 @EnableConfigurationProperties({ ZhipuAiChatProperties.class, ZhipuAiConnectionProperties.class, ZhipuAiEmbeddingProperties.class, ZhipuAiImageProperties.class })
-@ConditionalOnClass(ZhipuAiApi.class)
+@ConditionalOnClass(ClientV4.class)
 public class ZhipuAiAutoConfiguration {
 
     @Bean
@@ -41,8 +42,7 @@ public class ZhipuAiAutoConfiguration {
                                                ZhipuAiChatProperties chatProperties,
                                                List<FunctionCallback> toolFunctionCallbacks,
                                                FunctionCallbackContext functionCallbackContext,
-                                               RestClient.Builder restClientBuilder,
-                                               ResponseErrorHandler responseErrorHandler,
+                                               ObjectProvider<ICache> cacheProvider,
                                                ObjectProvider<RetryTemplate> retryTemplateProvider) {
         if (!CollectionUtils.isEmpty(toolFunctionCallbacks)) {
             chatProperties.getOptions().getFunctionCallbacks().addAll(toolFunctionCallbacks);
@@ -53,10 +53,10 @@ public class ZhipuAiAutoConfiguration {
         Assert.hasText(baseUrl, "ZhipuAI base URL must be set");
         Assert.hasText(apiKey, "ZhipuAI API key must be set");
 
-        ZhipuAiApi zhipuAiApi = new ZhipuAiApi(baseUrl, apiKey, restClientBuilder, responseErrorHandler);
+        ClientV4 zhipuClient = new ClientV4.Builder(apiKey).tokenCache(cacheProvider.getIfAvailable()).build();
 
         RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable(() -> RetryTemplate.builder().build());
-        return new ZhipuAiChatClient(zhipuAiApi, chatProperties.getOptions(), functionCallbackContext, retryTemplate);
+        return new ZhipuAiChatClient(zhipuClient, chatProperties.getOptions(), functionCallbackContext, retryTemplate);
     }
 
     @Bean
@@ -64,8 +64,7 @@ public class ZhipuAiAutoConfiguration {
     @ConditionalOnProperty(prefix = ZhipuAiEmbeddingProperties.CONFIG_PREFIX, name = "enabled")
     public ZhipuAiEmbeddingClient zhipuAiEmbeddingClient(ZhipuAiConnectionProperties connectionProperties,
                                                          ZhipuAiEmbeddingProperties embeddingProperties,
-                                                         RestClient.Builder restClientBuilder,
-                                                         ResponseErrorHandler responseErrorHandler,
+                                                         ObjectProvider<ICache> cacheProvider,
                                                          ObjectProvider<RetryTemplate> retryTemplateProvider) {
 
         String baseUrl = StringUtils.hasText(embeddingProperties.getBaseUrl()) ? embeddingProperties.getBaseUrl() : connectionProperties.getBaseUrl();
@@ -73,10 +72,9 @@ public class ZhipuAiAutoConfiguration {
         Assert.hasText(baseUrl, "ZhipuAI base URL must be set");
         Assert.hasText(apiKey, "ZhipuAI API key must be set");
 
-        ZhipuAiApi zhipuAiApi = new ZhipuAiApi(baseUrl, apiKey, restClientBuilder, responseErrorHandler);
-
+        ClientV4 zhipuClient = new ClientV4.Builder(apiKey).tokenCache(cacheProvider.getIfAvailable()).build();
         RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable(() -> RetryTemplate.builder().build());
-        return new ZhipuAiEmbeddingClient(zhipuAiApi, embeddingProperties.getMetadataMode(), embeddingProperties.getOptions(), retryTemplate);
+        return new ZhipuAiEmbeddingClient(zhipuClient, embeddingProperties.getMetadataMode(), embeddingProperties.getOptions(), retryTemplate);
     }
 
     @Bean

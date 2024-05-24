@@ -1,5 +1,13 @@
 package org.springframework.ai.zhipuai;
 
+import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.zhipu.oapi.ClientV4;
+import com.zhipu.oapi.Constants;
+import com.zhipu.oapi.service.v4.model.*;
+import io.reactivex.Flowable;
+import io.reactivex.rxjava3.core.FlowableSubscriber;
+import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.ChatClient;
@@ -13,7 +21,6 @@ import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.model.function.AbstractFunctionCallSupport;
 import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.ai.retry.RetryUtils;
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.http.ResponseEntity;
@@ -24,12 +31,14 @@ import reactor.core.publisher.Flux;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ZhipuAiChatClient
-        extends AbstractFunctionCallSupport<ZhipuAiApi.ChatCompletionMessage, ZhipuAiApi.ChatCompletionRequest, ResponseEntity<ZhipuAiApi.ChatCompletion>>
+        extends AbstractFunctionCallSupport<ChatMessage, ChatCompletionRequest, ResponseEntity<ModelApiResponse>>
         implements ChatClient, StreamingChatClient {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
+    private static String requestIdTemplate = "zhipu-ai-chat-%s";
     /**
      * Default options to be used for all chat requests.
      */
@@ -37,11 +46,11 @@ public class ZhipuAiChatClient
     /**
      * Low-level 智普 API library.
      */
-    private final ZhipuAiApi zhipuAiApi;
+    private final ClientV4 zhipuClient;
     private final RetryTemplate retryTemplate;
 
-    public ZhipuAiChatClient(ZhipuAiApi zhipuAiApi) {
-        this(zhipuAiApi, ZhipuAiChatOptions.builder()
+    public ZhipuAiChatClient(ClientV4 zhipuClient) {
+        this(zhipuClient, ZhipuAiChatOptions.builder()
                         .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
                         .withMaxToken(ApiUtils.DEFAULT_MAX_TOKENS)
                         .withDoSample(Boolean.TRUE)
@@ -50,17 +59,17 @@ public class ZhipuAiChatClient
                         .build());
     }
 
-    public ZhipuAiChatClient(ZhipuAiApi zhipuAiApi, ZhipuAiChatOptions options) {
-        this(zhipuAiApi, options, null, RetryUtils.DEFAULT_RETRY_TEMPLATE);
+    public ZhipuAiChatClient(ClientV4 zhipuClient, ZhipuAiChatOptions options) {
+        this(zhipuClient, options, null, RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 
-    public ZhipuAiChatClient(ZhipuAiApi zhipuAiApi, ZhipuAiChatOptions options,
+    public ZhipuAiChatClient(ClientV4 zhipuClient, ZhipuAiChatOptions options,
                                FunctionCallbackContext functionCallbackContext, RetryTemplate retryTemplate) {
         super(functionCallbackContext);
-        Assert.notNull(zhipuAiApi, "ZhipuAiApi must not be null");
+        Assert.notNull(zhipuClient, "ClientV4 must not be null");
         Assert.notNull(options, "Options must not be null");
         Assert.notNull(retryTemplate, "RetryTemplate must not be null");
-        this.zhipuAiApi = zhipuAiApi;
+        this.zhipuClient = zhipuClient;
         this.defaultOptions = options;
         this.retryTemplate = retryTemplate;
     }
@@ -69,11 +78,11 @@ public class ZhipuAiChatClient
     @Override
     public ChatResponse call(Prompt prompt) {
 
-        var request = createRequest(prompt, false);
+        var request = createRequest(prompt, false, Constants.invokeMethodAsync);
 
         return retryTemplate.execute(ctx -> {
 
-            ResponseEntity<ZhipuAiApi.ChatCompletion> completionEntity = this.callWithFunctionSupport(request);
+            ResponseEntity<ModelApiResponse> completionEntity = this.callWithFunctionSupport(request);
 
             var chatCompletion = completionEntity.getBody();
             if (chatCompletion == null) {
@@ -81,25 +90,25 @@ public class ZhipuAiChatClient
                 return new ChatResponse(List.of());
             }
 
-            List<Generation> generations = chatCompletion.choices()
+            List<Generation> generations = chatCompletion.getData().getChoices()
                     .stream()
-                    .map(choice -> new Generation(choice.message().content(), toMap(chatCompletion.id(), choice))
-                            .withGenerationMetadata(ChatGenerationMetadata.from(choice.finishReason().name(), null)))
+                    .map(choice -> new Generation(Objects.toString(choice.getMessage().getContent()), toMap(chatCompletion.getData().getId(), choice))
+                            .withGenerationMetadata(ChatGenerationMetadata.from(choice.getFinishReason(), null)))
                     .toList();
 
             return new ChatResponse(generations);
         });
     }
 
-    private Map<String, Object> toMap(String id, ZhipuAiApi.ChatCompletion.Choice choice) {
+    private Map<String, Object> toMap(String id, Choice choice) {
         Map<String, Object> map = new HashMap<>();
 
-        var message = choice.message();
-        if (message.role() != null) {
-            map.put("role", message.role().name());
+        var message = choice.getMessage();
+        if (message.getRole() != null) {
+            map.put("role", message.getRole());
         }
-        if (choice.finishReason() != null) {
-            map.put("finishReason", choice.finishReason().name());
+        if (choice.getFinishReason() != null) {
+            map.put("finishReason", choice.getFinishReason());
         }
         map.put("id", id);
         return map;
@@ -107,11 +116,44 @@ public class ZhipuAiChatClient
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
-        var request = createRequest(prompt, true);
-
+        var request = createRequest(prompt, true, Constants.invokeMethod);
         return retryTemplate.execute(ctx -> {
 
-            var completionChunks = this.zhipuAiApi.chatCompletionStream(request);
+            var completionChunks = this.zhipuClient.invokeModelApi(request);
+            if (completionChunks.isSuccess()) {
+                AtomicBoolean isFirst = new AtomicBoolean(true);
+                ChatMessageAccumulator chatMessageAccumulator = mapStreamToAccumulator(completionChunks.getFlowable())
+                        .doOnNext(accumulator -> {
+                            {
+                                if (isFirst.getAndSet(false)) {
+                                    System.out.print("Response: ");
+                                }
+                                if (accumulator.getDelta() != null && accumulator.getDelta().getTool_calls() != null) {
+                                    String jsonString = mapper.writeValueAsString(accumulator.getDelta().getTool_calls());
+                                    System.out.println("tool_calls: " + jsonString);
+                                }
+                                if (accumulator.getDelta() != null && accumulator.getDelta().getContent() != null) {
+                                    System.out.print(accumulator.getDelta().getContent());
+                                }
+                            }
+                        })
+                        .doOnComplete(System.out::println)
+                        .lastElement()
+                        .blockingGet();
+
+                Choice choice = new Choice(chatMessageAccumulator.getChoice().getFinishReason(), 0L, chatMessageAccumulator.getDelta());
+                List<Choice> choices = new ArrayList<>();
+                choices.add(choice);
+                ModelData data = new ModelData();
+                data.setChoices(choices);
+                data.setUsage(chatMessageAccumulator.getUsage());
+                data.setId(chatMessageAccumulator.getId());
+                data.setCreated(chatMessageAccumulator.getCreated());
+                data.setRequestId(request.getRequestId());
+                completionChunks.setFlowable(null);
+                completionChunks.setData(data);
+            }
+            System.out.println("model output:" + JSON.toJSONString(completionChunks));
 
             // For chunked responses, only the first chunk contains the choice role.
             // The rest of the chunks with same ID share the same role.
@@ -143,29 +185,40 @@ public class ZhipuAiChatClient
         });
     }
 
-    private ZhipuAiApi.ChatCompletion toChatCompletion(ZhipuAiApi.ChatCompletionChunk chunk) {
-        List<ZhipuAiApi.ChatCompletion.Choice> choices = chunk.choices()
+    private Flowable<ChatMessageAccumulator> mapStreamToAccumulator(Flowable<ModelData> flowable) {
+        return flowable.map(chunk -> new ChatMessageAccumulator(chunk.getChoices().get(0).getDelta(), null, chunk.getChoices().get(0), chunk.getUsage(), chunk.getCreated(), chunk.getId()));
+    }
+
+    private ModelApiResponse toChatCompletion(ModelApiResponseChunk chunk) {
+        List<ModelApiResponse.Choice> choices = chunk.choices()
                 .stream()
-                .map(cc -> new ZhipuAiApi.ChatCompletion.Choice(cc.index(), cc.delta(), cc.finishReason()))
+                .map(cc -> new ModelApiResponse.Choice(cc.index(), cc.delta(), cc.finishReason()))
                 .toList();
 
-        return new ZhipuAiApi.ChatCompletion(chunk.id(), "chat.completion", chunk.created(), chunk.model(), choices, chunk.requestId(),null);
+        return new ModelApiResponse(chunk.id(), "chat.completion", chunk.created(), chunk.model(), choices, chunk.requestId(),null);
     }
 
     /**
      * Accessible for testing.
      */
-    ZhipuAiApi.ChatCompletionRequest createRequest(Prompt prompt, boolean stream) {
+    ChatCompletionRequest createRequest(Prompt prompt, boolean stream, String invokeMethod) {
+
+        String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
 
         Set<String> functionsForThisRequest = new HashSet<>();
 
         var chatCompletionMessages = prompt.getInstructions()
                 .stream()
-                .map(m -> new ZhipuAiApi.ChatCompletionMessage(m.getContent(),
-                        ZhipuAiApi.ChatCompletionMessage.Role.valueOf(m.getMessageType().name())))
+                .map(m -> new ChatMessage(m.getMessageType().name(), m.getContent()))
                 .toList();
 
-        var request = new ZhipuAiApi.ChatCompletionRequest(null, chatCompletionMessages, stream);
+        var request = ChatCompletionRequest.builder()
+                .model(Constants.ModelChatGLM3TURBO)
+                .stream(stream)
+                .invokeMethod(invokeMethod)
+                .messages(chatCompletionMessages)
+                .requestId(requestId)
+                .build();
 
         if (this.defaultOptions != null) {
             Set<String> defaultEnabledFunctions = this.handleFunctionCallbackConfigurations(this.defaultOptions,
@@ -173,24 +226,20 @@ public class ZhipuAiChatClient
 
             functionsForThisRequest.addAll(defaultEnabledFunctions);
 
-            request = ModelOptionsUtils.merge(request, this.defaultOptions, ZhipuAiApi.ChatCompletionRequest.class);
+            request = ModelOptionsUtils.merge(request, this.defaultOptions, ChatCompletionRequest.class);
         }
 
         if (prompt.getOptions() != null) {
             if (prompt.getOptions() instanceof ChatOptions runtimeOptions) {
-                var updatedRuntimeOptions = ModelOptionsUtils.copyToTarget(runtimeOptions, ChatOptions.class,
-                        ZhipuAiChatOptions.class);
+                var updatedRuntimeOptions = ModelOptionsUtils.copyToTarget(runtimeOptions, ChatOptions.class, ZhipuAiChatOptions.class);
 
-                Set<String> promptEnabledFunctions = this.handleFunctionCallbackConfigurations(updatedRuntimeOptions,
-                        IS_RUNTIME_CALL);
+                Set<String> promptEnabledFunctions = this.handleFunctionCallbackConfigurations(updatedRuntimeOptions, IS_RUNTIME_CALL);
                 functionsForThisRequest.addAll(promptEnabledFunctions);
 
-                request = ModelOptionsUtils.merge(updatedRuntimeOptions, request,
-                        ZhipuAiApi.ChatCompletionRequest.class);
+                request = ModelOptionsUtils.merge(updatedRuntimeOptions, request, ChatCompletionRequest.class);
             }
             else {
-                throw new IllegalArgumentException("Prompt options are not of type ChatOptions: "
-                        + prompt.getOptions().getClass().getSimpleName());
+                throw new IllegalArgumentException("Prompt options are not of type ChatOptions: " + prompt.getOptions().getClass().getSimpleName());
             }
         }
 
@@ -199,17 +248,17 @@ public class ZhipuAiChatClient
 
             request = ModelOptionsUtils.merge(
                     ZhipuAiChatOptions.builder().withTools(this.getFunctionTools(functionsForThisRequest)).build(),
-                    request, ZhipuAiApi.ChatCompletionRequest.class);
+                    request, ChatCompletionRequest.class);
         }
 
         return request;
     }
 
-    private List<ZhipuAiApi.FunctionTool> getFunctionTools(Set<String> functionNames) {
+    private List<ToolCalls> getFunctionTools(Set<String> functionNames) {
         return this.resolveFunctionCallbacks(functionNames).stream().map(functionCallback -> {
-            var function = new ZhipuAiApi.FunctionTool.Function(functionCallback.getDescription(),
-                    functionCallback.getName(), functionCallback.getInputTypeSchema());
-            return new ZhipuAiApi.FunctionTool(function);
+            JsonNode arguments = JSON.parseObject(functionCallback.getInputTypeSchema(), JsonNode.class);
+            var function = new ChatFunctionCall(functionCallback.getName(), arguments);
+            return new ToolCalls(function, functionCallback.getName(), ChatMessageRole.FUNCTION.value());
         }).toList();
     }
 
@@ -217,16 +266,16 @@ public class ZhipuAiChatClient
     // Function Calling Support
     //
     @Override
-    protected ZhipuAiApi.ChatCompletionRequest doCreateToolResponseRequest(ZhipuAiApi.ChatCompletionRequest previousRequest,
-                                                                           ZhipuAiApi.ChatCompletionMessage responseMessage,
-                                                                           List<ZhipuAiApi.ChatCompletionMessage> conversationHistory) {
+    protected ChatCompletionRequest doCreateToolResponseRequest(ChatCompletionRequest previousRequest,
+                                                                           ChatMessage responseMessage,
+                                                                           List<ChatMessage> conversationHistory) {
 
         // Every tool-call item requires a separate function call and a response (TOOL)
         // message.
-        for (ZhipuAiApi.ChatCompletionMessage.ToolCall toolCall : responseMessage.toolCalls()) {
+        for (ToolCalls toolCall : responseMessage.getTool_calls()) {
 
-            var functionName = toolCall.function().name();
-            String functionArguments = toolCall.function().arguments();
+            var functionName = toolCall.getFunction().getName();
+            String functionArguments = toolCall.getFunction().getArguments().asText();
 
             if (!this.functionCallbackRegister.containsKey(functionName)) {
                 throw new IllegalStateException("No function callback found for function name: " + functionName);
@@ -235,47 +284,48 @@ public class ZhipuAiChatClient
             String functionResponse = this.functionCallbackRegister.get(functionName).call(functionArguments);
 
             // Add the function response to the conversation.
-            conversationHistory
-                    .add(new ZhipuAiApi.ChatCompletionMessage(functionResponse, ZhipuAiApi.ChatCompletionMessage.Role.TOOL, functionName, null));
+            conversationHistory.add(new ChatMessage(ChatMessageRole.FUNCTION.value(), functionResponse, functionName, toolCall.getId()));
+
         }
 
         // Recursively call chatCompletionWithTools until the model doesn't call a
         // functions anymore.
-        ZhipuAiApi.ChatCompletionRequest newRequest = new ZhipuAiApi.ChatCompletionRequest(previousRequest.requestId(), conversationHistory, false);
-        newRequest = ModelOptionsUtils.merge(newRequest, previousRequest, ZhipuAiApi.ChatCompletionRequest.class);
+        ChatCompletionRequest newRequest = new ChatCompletionRequest(previousRequest.getRequestId(), conversationHistory, false);
+        newRequest = ModelOptionsUtils.merge(newRequest, previousRequest, ChatCompletionRequest.class);
 
         return newRequest;
     }
 
     @Override
-    protected List<ZhipuAiApi.ChatCompletionMessage> doGetUserMessages(ZhipuAiApi.ChatCompletionRequest request) {
-        return request.messages();
+    protected List<ChatMessage> doGetUserMessages(ChatCompletionRequest request) {
+        return request.getMessages();
     }
 
     @SuppressWarnings("null")
     @Override
-    protected ZhipuAiApi.ChatCompletionMessage doGetToolResponseMessage(ResponseEntity<ZhipuAiApi.ChatCompletion> chatCompletion) {
-        return chatCompletion.getBody().choices().iterator().next().message();
+    protected ChatMessage doGetToolResponseMessage(ResponseEntity<ModelApiResponse> chatCompletion) {
+        return chatCompletion.getBody().getData().getChoices().iterator().next().getMessage();
     }
 
     @Override
-    protected ResponseEntity<ZhipuAiApi.ChatCompletion> doChatCompletion(ZhipuAiApi.ChatCompletionRequest request) {
-        return this.zhipuAiApi.chatCompletionEntity(request);
+    protected ResponseEntity<ModelApiResponse> doChatCompletion(ChatCompletionRequest request) {
+        ModelApiResponse invokeModelApiResp = zhipuClient.invokeModelApi(request);
+        return ResponseEntity.ofNullable(invokeModelApiResp);
     }
 
     @Override
-    protected boolean isToolFunctionCall(ResponseEntity<ZhipuAiApi.ChatCompletion> chatCompletion) {
+    protected boolean isToolFunctionCall(ResponseEntity<ModelApiResponse> chatCompletion) {
 
         var body = chatCompletion.getBody();
         if (body == null) {
             return false;
         }
 
-        var choices = body.choices();
+        var choices = body.getData().getChoices();
         if (CollectionUtils.isEmpty(choices)) {
             return false;
         }
 
-        return !CollectionUtils.isEmpty(choices.get(0).message().toolCalls());
+        return !CollectionUtils.isEmpty(choices.get(0).getMessage().getTool_calls());
     }
 }

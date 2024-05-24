@@ -13,7 +13,7 @@
 	<groupId>com.github.teachingai</groupId>
 	<artifactId>spring-ai-zhipuai-spring-boot-starter</artifactId>
 	<description>Spring Boot Starter For Spring AI Implementation Base On ZhiPu AI（ChatGLM）</description>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>zhipuai-sdk-java-v4-1.0.0-SNAPSHOT</version>
 	<name>${project.groupId}:${project.artifactId}</name>
 	<url>https://github.com/hiwepy/${project.artifactId}</url>
 	<packaging>jar</packaging>
@@ -372,6 +372,7 @@
 		<maven-nexus-staging-plugin.version>1.6.8</maven-nexus-staging-plugin.version>
 		<java.version>17</java.version>
 		<spring-ai.version>0.8.1</spring-ai.version>
+		<zhipuai-sdk-java.version>release-V4-2.0.2</zhipuai-sdk-java.version>
 	</properties>
 
 	<dependencyManagement>
@@ -387,6 +388,12 @@
 				<groupId>org.springframework.ai</groupId>
 				<artifactId>spring-ai-retry</artifactId>
 				<version>${spring-ai.version}</version>
+			</dependency>
+			<!-- https://mvnrepository.com/artifact/cn.bigmodel.openapi/oapi-java-sdk -->
+			<dependency>
+				<groupId>cn.bigmodel.openapi</groupId>
+				<artifactId>oapi-java-sdk</artifactId>
+				<version>${zhipuai-sdk-java.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -435,6 +442,14 @@
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-retry</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>cn.bigmodel.openapi</groupId>
+			<artifactId>oapi-java-sdk</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-redis</artifactId>
 		</dependency>
 
 	</dependencies>

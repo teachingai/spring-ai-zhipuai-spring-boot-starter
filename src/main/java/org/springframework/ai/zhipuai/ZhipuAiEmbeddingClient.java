@@ -1,5 +1,9 @@
 package org.springframework.ai.zhipuai;
 
+import com.zhipu.oapi.ClientV4;
+import com.zhipu.oapi.Constants;
+import com.zhipu.oapi.service.v4.embedding.EmbeddingResult;
+import com.zhipu.oapi.service.v4.model.Usage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -7,13 +11,13 @@ import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.*;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.retry.RetryUtils;
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
 import org.springframework.ai.zhipuai.api.ZhipuAiEmbeddingOptions;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
 
@@ -24,34 +28,33 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
     private final MetadataMode metadataMode;
 
     /**
-     * Low-level 智普 API library.
+     * 智普 SDK library.
      */
-    private final ZhipuAiApi zhipuAiApi;
+    private final ClientV4 zhipuClient;
 
     private final RetryTemplate retryTemplate;
 
-    public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi) {
-        this(zhipuAiApi, MetadataMode.EMBED);
+    public ZhipuAiEmbeddingClient(ClientV4 zhipuClient) {
+        this(zhipuClient, MetadataMode.EMBED);
     }
 
-    public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi, MetadataMode metadataMode) {
-        this(zhipuAiApi, metadataMode, ZhipuAiEmbeddingOptions.builder()
-                        .withModel(ZhipuAiApi.EmbeddingModel.EMBED.getValue()).build(),
+    public ZhipuAiEmbeddingClient(ClientV4 zhipuClient, MetadataMode metadataMode) {
+        this(zhipuClient, metadataMode, ZhipuAiEmbeddingOptions.builder().withModel(Constants.ModelEmbedding2).build(),
                 RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 
-    public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi, ZhipuAiEmbeddingOptions options) {
-        this(zhipuAiApi, MetadataMode.EMBED, options, RetryUtils.DEFAULT_RETRY_TEMPLATE);
+    public ZhipuAiEmbeddingClient(ClientV4 zhipuClient, ZhipuAiEmbeddingOptions options) {
+        this(zhipuClient, MetadataMode.EMBED, options, RetryUtils.DEFAULT_RETRY_TEMPLATE);
     }
 
-    public ZhipuAiEmbeddingClient(ZhipuAiApi zhipuAiApi, MetadataMode metadataMode,
+    public ZhipuAiEmbeddingClient(ClientV4 zhipuClient, MetadataMode metadataMode,
                                   ZhipuAiEmbeddingOptions options, RetryTemplate retryTemplate) {
-        Assert.notNull(zhipuAiApi, "ZhipuAiApi must not be null");
+        Assert.notNull(zhipuClient, "ClientV4 must not be null");
         Assert.notNull(metadataMode, "metadataMode must not be null");
         Assert.notNull(options, "options must not be null");
         Assert.notNull(retryTemplate, "retryTemplate must not be null");
 
-        this.zhipuAiApi = zhipuAiApi;
+        this.zhipuClient = zhipuClient;
         this.metadataMode = metadataMode;
         this.defaultOptions = options;
         this.retryTemplate = retryTemplate;
@@ -73,25 +76,35 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
             }
             var inputContent = CollectionUtils.firstElement(request.getInstructions());
             var apiRequest = (this.defaultOptions != null)
-                    ? new ZhipuAiApi.EmbeddingRequest(inputContent, this.defaultOptions.getModel())
-                    : new ZhipuAiApi.EmbeddingRequest(inputContent, ZhipuAiApi.EmbeddingModel.EMBED.getValue());
+                    ? new com.zhipu.oapi.service.v4.embedding.EmbeddingRequest(this.defaultOptions.getModel(), inputContent, "")
+                    : new com.zhipu.oapi.service.v4.embedding.EmbeddingRequest(Constants.ModelEmbedding2, inputContent, "");
 
             if (request.getOptions() != null && !EmbeddingOptions.EMPTY.equals(request.getOptions())) {
-                apiRequest = ModelOptionsUtils.merge(request.getOptions(), apiRequest, ZhipuAiApi.EmbeddingRequest.class);
+                apiRequest = ModelOptionsUtils.merge(request.getOptions(), apiRequest, com.zhipu.oapi.service.v4.embedding.EmbeddingRequest.class);
             }
 
-            var apiEmbeddingResponse = this.zhipuAiApi.embeddings(apiRequest).getBody();
 
-            if (apiEmbeddingResponse == null) {
+            var apiEmbeddingResponse = zhipuClient.invokeEmbeddingsApi(apiRequest);;
+            if (Objects.isNull(apiEmbeddingResponse)) {
+                logger.warn("No embeddings returned for request: {}", request);
+                return new EmbeddingResponse(List.of());
+            }
+            if (apiEmbeddingResponse.isSuccess()) {
+                logger.error("embeddings error for request，code : {}，error : {}", apiEmbeddingResponse.getCode(), apiEmbeddingResponse.getMsg());
+                return new EmbeddingResponse(List.of());
+            }
+
+            EmbeddingResult embeddingResult = apiEmbeddingResponse.getData();
+            if (Objects.isNull(embeddingResult)) {
                 logger.warn("No embeddings returned for request: {}", request);
                 return new EmbeddingResponse(List.of());
             }
 
-            var metadata = generateResponseMetadata(apiEmbeddingResponse.model(), apiEmbeddingResponse.usage());
+            var metadata = generateResponseMetadata(embeddingResult.getModel(), embeddingResult.getUsage());
 
-            var embeddings = apiEmbeddingResponse.data()
+            var embeddings = embeddingResult.getData()
                     .stream()
-                    .map(e -> new Embedding(e.embedding(), e.index()))
+                    .map(e -> new Embedding(e.getEmbedding(), e.getIndex()))
                     .toList();
 
             return new EmbeddingResponse(embeddings, metadata);
@@ -99,11 +112,12 @@ public class ZhipuAiEmbeddingClient extends AbstractEmbeddingClient {
         });
     }
 
-    private EmbeddingResponseMetadata generateResponseMetadata(String model, ZhipuAiApi.Usage usage) {
+    private EmbeddingResponseMetadata generateResponseMetadata(String model, Usage usage) {
         var metadata = new EmbeddingResponseMetadata();
         metadata.put("model", model);
-        metadata.put("prompt-tokens", usage.promptTokens());
-        metadata.put("total-tokens", usage.totalTokens());
+        metadata.put("prompt-tokens", usage.getPromptTokens());
+        metadata.put("completion-tokens", usage.getCompletionTokens());
+        metadata.put("total-tokens", usage.getTotalTokens());
         return metadata;
     }
 

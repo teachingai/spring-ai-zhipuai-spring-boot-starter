@@ -1,6 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
+import com.zhipu.oapi.Constants;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.ai.zhipuai.util.ApiUtils;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -24,7 +24,7 @@ public class ZhipuAiChatProperties extends ZhipuAiParentProperties {
      */
     @NestedConfigurationProperty
     private ZhipuAiChatOptions options = ZhipuAiChatOptions.builder()
-            .withModel(ZhipuAiApi.ChatModel.GLM_3_TURBO.getValue())
+            .withModel(Constants.ModelChatGLM3TURBO)
             .withMaxToken(ApiUtils.DEFAULT_MAX_TOKENS)
             .withDoSample(Boolean.TRUE)
             .withTemperature(ApiUtils.DEFAULT_TEMPERATURE)
