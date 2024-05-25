@@ -133,12 +133,14 @@ public class ZhipuAiChatClient
         String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
         var request = this.createRequest(prompt, requestId, true, Constants.invokeMethod);
         // 2、执行请求
-        return retryTemplate.execute(ctx -> {
+        return retryTemplate.execute(ctx -> Flux.create(sink -> {
             // 3、调用智能聊天接口
-            var completionChunks = this.zhipuClient.invokeModelApi(request);
-            if (completionChunks.isSuccess()) {
+            var sseModelApiResp = this.zhipuClient.invokeModelApi(request);
+            if (sseModelApiResp.isSuccess()) {
+
+
                 AtomicBoolean isFirst = new AtomicBoolean(true);
-                ChatMessageAccumulator chatMessageAccumulator = mapStreamToAccumulator(completionChunks.getFlowable())
+                ChatMessageAccumulator chatMessageAccumulator = this.mapStreamToAccumulator(sseModelApiResp.getFlowable())
                         .doOnNext(accumulator -> {
                             {
                                 if (isFirst.getAndSet(false)) {
@@ -151,9 +153,10 @@ public class ZhipuAiChatClient
                                 if (accumulator.getDelta() != null && accumulator.getDelta().getContent() != null) {
                                     System.out.print(accumulator.getDelta().getContent());
                                 }
+                                sink.next();
                             }
                         })
-                        .doOnComplete(System.out::println)
+                        .doOnComplete(() -> sink.complete())
                         .lastElement()
                         .blockingGet();
 
@@ -166,16 +169,19 @@ public class ZhipuAiChatClient
                 data.setId(chatMessageAccumulator.getId());
                 data.setCreated(chatMessageAccumulator.getCreated());
                 data.setRequestId(request.getRequestId());
-                completionChunks.setFlowable(null);
-                completionChunks.setData(data);
+                sseModelApiResp.setFlowable(null);
+                sseModelApiResp.setData(data);
+
+
+
             }
-            System.out.println("model output:" + JSON.toJSONString(completionChunks));
+            System.out.println("model output:" + JSON.toJSONString(sseModelApiResp));
 
             // For chunked responses, only the first chunk contains the choice role.
             // The rest of the chunks with same ID share the same role.
             ConcurrentHashMap<String, String> roleMap = new ConcurrentHashMap<>();
 
-            return completionChunks.map(chunk -> toChatCompletion(chunk)).map(chatCompletion -> {
+            return completionChunks.getFlowable().map(chunk -> toChatCompletion(chunk)).map(chatCompletion -> {
 
                 chatCompletion = handleFunctionCallOrReturn(request, ResponseEntity.of(Optional.of(chatCompletion)))
                         .getBody();
@@ -198,15 +204,15 @@ public class ZhipuAiChatClient
                 }).toList();
                 return new ChatResponse(generations);
             });
-        });
+        }));
     }
 
     private Flowable<ChatMessageAccumulator> mapStreamToAccumulator(Flowable<ModelData> flowable) {
         return flowable.map(chunk -> new ChatMessageAccumulator(chunk.getChoices().get(0).getDelta(), null, chunk.getChoices().get(0), chunk.getUsage(), chunk.getCreated(), chunk.getId()));
     }
 
-    private ModelApiResponse toChatCompletion(ModelApiResponseChunk chunk) {
-        List<ModelApiResponse.Choice> choices = chunk.choices()
+    private ChatMessageAccumulator toChatCompletion(ModelData chunk) {
+        List<ModelApiResponse.Choice> choices = chunk.getChoices()
                 .stream()
                 .map(cc -> new ModelApiResponse.Choice(cc.index(), cc.delta(), cc.finishReason()))
                 .toList();
@@ -263,11 +269,26 @@ public class ZhipuAiChatClient
         return chatCompletionRequest;
     }
 
-    private List<ToolCalls> getFunctionTools(Set<String> functionNames) {
+    private List<ChatTool> getFunctionTools(Set<String> functionNames) {
         return this.resolveFunctionCallbacks(functionNames).stream().map(functionCallback -> {
-            JsonNode arguments = JSON.parseObject(functionCallback.getInputTypeSchema(), JsonNode.class);
-            var function = new ChatFunctionCall(functionCallback.getName(), arguments);
-            return new ToolCalls(function, functionCallback.getName(), ChatMessageRole.FUNCTION.value());
+
+            ChatTool chatTool = new ChatTool();
+            chatTool.setType(ChatToolType.FUNCTION.value());
+            ChatFunctionParameters chatFunctionParameters = OBJECT_MAPPER.convertValue(functionCallback.getInputTypeSchema(), ChatFunctionParameters.class);
+            ChatFunction chatFunction = ChatFunction.builder()
+                    .name(functionCallback.getName())
+                    .description(functionCallback.getDescription())
+                    .parameters(chatFunctionParameters)
+                    .build();
+            chatTool.setFunction(chatFunction);
+/*
+            chatTool1.setType(ChatToolType.WEB_SEARCH.value());
+            WebSearch webSearch = new WebSearch();
+            webSearch.setSearch_query("清华的升学率");
+            webSearch.setEnable(false);
+            chatTool1.setWeb_search(webSearch);*/
+
+            return chatTool;
         }).toList();
     }
 

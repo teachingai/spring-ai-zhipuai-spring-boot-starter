@@ -1,8 +1,13 @@
 package org.springframework.ai.zhipuai.util;
 
+import org.springframework.ai.chat.ChatResponse;
+import org.springframework.ai.chat.Generation;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ApiUtils {
@@ -21,5 +26,11 @@ public class ApiUtils {
             // headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         };
     };
+
+    public static ChatResponse toChatResponse(String callBackId, LLMResp llmResp, boolean completion) {
+        List<Generation> generations = Arrays.asList(new Generation(llmResp.getAnswer(), ApiUtils.toMap(callBackId, llmResp))
+                .withGenerationMetadata( completion ? ChatGenerationMetadata.from("chat.completion", null) : ChatGenerationMetadata.NULL));
+        return new ChatResponse(generations);
+    }
 
 }

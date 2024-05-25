@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zhipu.oapi.service.v4.model.ChatTool;
 import com.zhipu.oapi.service.v4.model.ToolCalls;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.model.function.FunctionCallback;
@@ -66,7 +67,14 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
      * 可供模型调用的工具列表,tools 字段会计算 tokens ，同样受到 tokens 长度的限制
      */
     @NestedConfigurationProperty
-    private @JsonProperty("tools") List<ToolCalls> tools;
+    private @JsonProperty("tools") List<ChatTool> tools;
+
+    /**
+     * 所要调用的模型编码
+     */
+    @JsonProperty("toolChoice")
+    private String toolChoice;
+
 
     @Override
     public List<FunctionCallback> getFunctionCallbacks() {
@@ -131,7 +139,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
             return this;
         }
 
-        public Builder withTools(List<ToolCalls> tools) {
+        public Builder withTools(List<ChatTool> tools) {
             this.options.setTools(tools);
             return this;
         }
@@ -215,7 +223,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
         return tools;
     }
 
-    public void setTools(List<ToolCalls> tools) {
+    public void setTools(List<ChatTool> tools) {
         this.tools = tools;
     }
 

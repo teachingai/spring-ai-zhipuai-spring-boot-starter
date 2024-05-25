@@ -13,7 +13,6 @@ import org.springframework.ai.zhipuai.ZhipuAiChatClient;
 import org.springframework.ai.zhipuai.ZhipuAiEmbeddingClient;
 import org.springframework.ai.zhipuai.ZhipuAiFineTuningClient;
 import org.springframework.ai.zhipuai.ZhipuAiImageClient;
-import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -27,8 +26,6 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.ResponseErrorHandler;
-import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
@@ -99,19 +96,15 @@ public class ZhipuAiAutoConfiguration {
     @ConditionalOnProperty(prefix = ZhipuAiImageProperties.CONFIG_PREFIX, name = "enabled")
     public ZhipuAiImageClient zhipuAiImageClient(ZhipuAiConnectionProperties connectionProperties,
                                                  ZhipuAiImageProperties imageProperties,
-                                                 RestClient.Builder restClientBuilder,
-                                                 ResponseErrorHandler responseErrorHandler,
+                                                 ObjectProvider<ICache> cacheProvider,
                                                  ObjectProvider<RetryTemplate> retryTemplateProvider) {
 
-        String baseUrl = StringUtils.hasText(imageProperties.getBaseUrl()) ? imageProperties.getBaseUrl() : connectionProperties.getBaseUrl();
         String apiKey = StringUtils.hasText(imageProperties.getApiKey()) ? imageProperties.getApiKey() : connectionProperties.getApiKey();
-        Assert.hasText(baseUrl, "ZhipuAI base URL must be set");
         Assert.hasText(apiKey, "ZhipuAI API key must be set");
 
-        ZhipuAiImageApi zhipuAiImageApi = new ZhipuAiImageApi(baseUrl, apiKey, restClientBuilder, responseErrorHandler);
-
+        ClientV4 zhipuClient = new ClientV4.Builder(apiKey).tokenCache(cacheProvider.getIfAvailable()).build();
         RetryTemplate retryTemplate = retryTemplateProvider.getIfAvailable(() -> RetryTemplate.builder().build());
-        return new ZhipuAiImageClient(zhipuAiImageApi, imageProperties.getOptions(), retryTemplate);
+        return new ZhipuAiImageClient(zhipuClient, imageProperties.getOptions(), retryTemplate);
     }
 
 
