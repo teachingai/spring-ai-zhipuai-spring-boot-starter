@@ -10,7 +10,7 @@ import com.zhipu.oapi.ClientV4;
 import com.zhipu.oapi.Constants;
 import com.zhipu.oapi.service.v4.model.*;
 import io.reactivex.Flowable;
-import io.reactivex.rxjava3.core.FlowableSubscriber;
+import io.reactivex.FlowableSubscriber;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
@@ -33,6 +33,7 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import reactor.adapter.rxjava.RxJava2Adapter;
+import reactor.core.CoreSubscriber;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable;
 import reactor.core.publisher.Flux;
@@ -144,6 +145,9 @@ public class ZhipuAiChatClient
             if (sseModelApiResp.isSuccess()) {
 
                 RxJava2Adapter.flowableToFlux(sseModelApiResp.getFlowable());
+
+                new FlowableAsFlux<>(sseModelApiResp.getFlowable()).
+
                 AtomicBoolean isFirst = new AtomicBoolean(true);
                 ChatMessageAccumulator chatMessageAccumulator = this.mapStreamToAccumulator(sseModelApiResp.getFlowable())
                         .doOnNext(accumulator -> {
@@ -364,86 +368,194 @@ public class ZhipuAiChatClient
         return !CollectionUtils.isEmpty(choices.get(0).getMessage().getTool_calls());
     }
 
-    static final class FlowableAsFluxSubscriber<T> implements FlowableSubscriber<T>, Fuseable.QueueSubscription<T> {
+    static final class FlowableAsFlux<T> extends Flux<T> implements Fuseable {
 
-        final Subscriber<? super T> actual;
+        final Flowable<T> source;
 
-        Subscription s;
-
-        io.reactivex.internal.fuseable.QueueSubscription<T> qs;
-
-        public FlowableAsFluxSubscriber(Subscriber<? super T> actual) {
-            this.actual = actual;
+        public FlowableAsFlux(Flowable<T> source) {
+            this.source = source;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void onSubscribe(Subscription s) {
-            if (Operators.validate(this.s, s)) {
-                this.s = s;
-                if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
-                    this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
+        public void subscribe(CoreSubscriber<? super T> s) {
+            if (s instanceof ConditionalSubscriber) {
+                source.subscribe(new FlowableAsFlux.FlowableAsFluxConditionalSubscriber<>((ConditionalSubscriber<? super T>)s));
+            } else {
+                source.subscribe(new FlowableAsFlux.FlowableAsFluxSubscriber<>(s));
+            }
+        }
+
+        static final class FlowableAsFluxSubscriber<T> implements FlowableSubscriber<T>, QueueSubscription<T> {
+
+            final Subscriber<? super T> actual;
+
+            Subscription s;
+
+            io.reactivex.internal.fuseable.QueueSubscription<T> qs;
+
+            public FlowableAsFluxSubscriber(Subscriber<? super T> actual) {
+                this.actual = actual;
+            }
+
+            @SuppressWarnings("unchecked")
+            @Override
+            public void onSubscribe(Subscription s) {
+                if (Operators.validate(this.s, s)) {
+                    this.s = s;
+                    if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
+                        this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
+                    }
+
+                    actual.onSubscribe(this);
                 }
+            }
 
-                actual.onSubscribe(this);
+            @Override
+            public void onNext(T t) {
+                actual.onNext(t);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                actual.onError(t);
+            }
+
+            @Override
+            public void onComplete() {
+                actual.onComplete();
+            }
+
+            @Override
+            public void request(long n) {
+                s.request(n);
+            }
+
+            @Override
+            public void cancel() {
+                s.cancel();
+            }
+
+            @Override
+            public T poll() {
+                try {
+                    return qs.poll();
+                } catch (Throwable ex) {
+                    throw Exceptions.bubble(ex);
+                }
+            }
+
+            @Override
+            public int size() {
+                return 0; // not supported
+            }
+
+            @Override
+            public boolean isEmpty() {
+                return qs.isEmpty();
+            }
+
+            @Override
+            public void clear() {
+                qs.clear();
+            }
+
+            @Override
+            public int requestFusion(int requestedMode) {
+                if (qs != null) {
+                    return qs.requestFusion(requestedMode);
+                }
+                return NONE;
             }
         }
 
-        @Override
-        public void onNext(T t) {
-            actual.onNext(t);
-        }
+        static final class FlowableAsFluxConditionalSubscriber<T> implements
+                io.reactivex.internal.fuseable.ConditionalSubscriber<T>, QueueSubscription<T> {
 
-        @Override
-        public void onError(Throwable t) {
-            actual.onError(t);
-        }
+            final ConditionalSubscriber<? super T> actual;
 
-        @Override
-        public void onComplete() {
-            actual.onComplete();
-        }
+            Subscription s;
 
-        @Override
-        public void request(long n) {
-            s.request(n);
-        }
+            io.reactivex.internal.fuseable.QueueSubscription<T> qs;
 
-        @Override
-        public void cancel() {
-            s.cancel();
-        }
-
-        @Override
-        public T poll() {
-            try {
-                return qs.poll();
-            } catch (Throwable ex) {
-                throw Exceptions.bubble(ex);
+            public FlowableAsFluxConditionalSubscriber(ConditionalSubscriber<? super T> actual) {
+                this.actual = actual;
             }
-        }
 
-        @Override
-        public int size() {
-            return 0; // not supported
-        }
+            @SuppressWarnings("unchecked")
+            @Override
+            public void onSubscribe(Subscription s) {
+                if (Operators.validate(this.s, s)) {
+                    this.s = s;
+                    if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
+                        this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
+                    }
 
-        @Override
-        public boolean isEmpty() {
-            return qs.isEmpty();
-        }
-
-        @Override
-        public void clear() {
-            qs.clear();
-        }
-
-        @Override
-        public int requestFusion(int requestedMode) {
-            if (qs != null) {
-                return qs.requestFusion(requestedMode);
+                    actual.onSubscribe(this);
+                }
             }
-            return Fuseable.NONE;
+
+            @Override
+            public void onNext(T t) {
+                actual.onNext(t);
+            }
+
+            @Override
+            public boolean tryOnNext(T t) {
+                return actual.tryOnNext(t);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                actual.onError(t);
+            }
+
+            @Override
+            public void onComplete() {
+                actual.onComplete();
+            }
+
+            @Override
+            public void request(long n) {
+                s.request(n);
+            }
+
+            @Override
+            public void cancel() {
+                s.cancel();
+            }
+
+            @Override
+            public T poll() {
+                try {
+                    return qs.poll();
+                } catch (Throwable ex) {
+                    throw Exceptions.bubble(ex);
+                }
+            }
+
+            @Override
+            public int size() {
+                return 0; // not supported
+            }
+
+            @Override
+            public boolean isEmpty() {
+                return qs.isEmpty();
+            }
+
+            @Override
+            public void clear() {
+                qs.clear();
+            }
+
+            @Override
+            public int requestFusion(int requestedMode) {
+                if (qs != null) {
+                    return qs.requestFusion(requestedMode);
+                }
+                return NONE;
+            }
         }
     }
+
 }
