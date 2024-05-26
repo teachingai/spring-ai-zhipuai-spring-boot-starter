@@ -11,6 +11,7 @@ import com.zhipu.oapi.Constants;
 import com.zhipu.oapi.service.v4.model.*;
 import io.reactivex.Flowable;
 import io.reactivex.rxjava3.core.FlowableSubscriber;
+import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
+import reactor.adapter.rxjava.RxJava2Adapter;
+import reactor.core.Exceptions;
+import reactor.core.Fuseable;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Operators;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -138,7 +143,7 @@ public class ZhipuAiChatClient
             var sseModelApiResp = this.zhipuClient.invokeModelApi(request);
             if (sseModelApiResp.isSuccess()) {
 
-
+                RxJava2Adapter.flowableToFlux(sseModelApiResp.getFlowable());
                 AtomicBoolean isFirst = new AtomicBoolean(true);
                 ChatMessageAccumulator chatMessageAccumulator = this.mapStreamToAccumulator(sseModelApiResp.getFlowable())
                         .doOnNext(accumulator -> {
@@ -357,5 +362,88 @@ public class ZhipuAiChatClient
         }
 
         return !CollectionUtils.isEmpty(choices.get(0).getMessage().getTool_calls());
+    }
+
+    static final class FlowableAsFluxSubscriber<T> implements FlowableSubscriber<T>, Fuseable.QueueSubscription<T> {
+
+        final Subscriber<? super T> actual;
+
+        Subscription s;
+
+        io.reactivex.internal.fuseable.QueueSubscription<T> qs;
+
+        public FlowableAsFluxSubscriber(Subscriber<? super T> actual) {
+            this.actual = actual;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void onSubscribe(Subscription s) {
+            if (Operators.validate(this.s, s)) {
+                this.s = s;
+                if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
+                    this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
+                }
+
+                actual.onSubscribe(this);
+            }
+        }
+
+        @Override
+        public void onNext(T t) {
+            actual.onNext(t);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            actual.onError(t);
+        }
+
+        @Override
+        public void onComplete() {
+            actual.onComplete();
+        }
+
+        @Override
+        public void request(long n) {
+            s.request(n);
+        }
+
+        @Override
+        public void cancel() {
+            s.cancel();
+        }
+
+        @Override
+        public T poll() {
+            try {
+                return qs.poll();
+            } catch (Throwable ex) {
+                throw Exceptions.bubble(ex);
+            }
+        }
+
+        @Override
+        public int size() {
+            return 0; // not supported
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return qs.isEmpty();
+        }
+
+        @Override
+        public void clear() {
+            qs.clear();
+        }
+
+        @Override
+        public int requestFusion(int requestedMode) {
+            if (qs != null) {
+                return qs.requestFusion(requestedMode);
+            }
+            return Fuseable.NONE;
+        }
     }
 }
