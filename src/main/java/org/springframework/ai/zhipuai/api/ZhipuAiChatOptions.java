@@ -219,7 +219,7 @@ public class ZhipuAiChatOptions implements FunctionCallingOptions, ChatOptions {
         return model;
     }
 
-    public List<ToolCalls> getTools() {
+    public List<ChatTool> getTools() {
         return tools;
     }
 

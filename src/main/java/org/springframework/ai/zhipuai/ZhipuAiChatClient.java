@@ -1,9 +1,7 @@
 package org.springframework.ai.zhipuai;
 
-import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.zhipu.oapi.ClientV4;
@@ -11,7 +9,6 @@ import com.zhipu.oapi.Constants;
 import com.zhipu.oapi.service.v4.model.*;
 import io.reactivex.Flowable;
 import io.reactivex.FlowableSubscriber;
-import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,19 +29,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
-import reactor.adapter.rxjava.RxJava2Adapter;
-import reactor.core.CoreSubscriber;
-import reactor.core.Exceptions;
-import reactor.core.Fuseable;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Operators;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ZhipuAiChatClient
-        extends AbstractFunctionCallSupport<ChatMessage, ChatCompletionRequest, ResponseEntity<ModelApiResponse>>
+        extends AbstractFunctionCallSupport<ChatMessage, ChatCompletionRequest, ResponseEntity<ModelData>>
         implements ChatClient, StreamingChatClient {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
@@ -101,7 +91,7 @@ public class ZhipuAiChatClient
         // 2、执行请求
         return retryTemplate.execute(ctx -> {
             // 3、调用智能聊天接口
-            ResponseEntity<ModelApiResponse> completionEntity = this.callWithFunctionSupport(request);
+            ResponseEntity<ModelData> completionEntity = this.callWithFunctionSupport(request);
 
             var chatCompletion = completionEntity.getBody();
             if (chatCompletion == null) {
@@ -109,9 +99,9 @@ public class ZhipuAiChatClient
                 return new ChatResponse(List.of());
             }
 
-            List<Generation> generations = chatCompletion.getData().getChoices()
+            List<Generation> generations = chatCompletion.getChoices()
                     .stream()
-                    .map(choice -> new Generation(Objects.toString(choice.getMessage().getContent()), toMap(chatCompletion.getData().getId(), choice))
+                    .map(choice -> new Generation(Objects.toString(choice.getMessage().getContent()), toMap(chatCompletion.getId(), choice))
                             .withGenerationMetadata(ChatGenerationMetadata.from(choice.getFinishReason(), null)))
                     .toList();
 
@@ -139,94 +129,71 @@ public class ZhipuAiChatClient
         String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
         var request = this.createRequest(prompt, requestId, true, Constants.invokeMethod);
         // 2、执行请求
-        return retryTemplate.execute(ctx -> Flux.create(sink -> {
+        return retryTemplate.execute(ctx ->  {
             // 3、调用智能聊天接口
             var sseModelApiResp = this.zhipuClient.invokeModelApi(request);
             if (sseModelApiResp.isSuccess()) {
-
-                RxJava2Adapter.flowableToFlux(sseModelApiResp.getFlowable());
-
-                new FlowableAsFlux<>(sseModelApiResp.getFlowable()).
-
-                AtomicBoolean isFirst = new AtomicBoolean(true);
-                ChatMessageAccumulator chatMessageAccumulator = this.mapStreamToAccumulator(sseModelApiResp.getFlowable())
-                        .doOnNext(accumulator -> {
-                            {
-                                if (isFirst.getAndSet(false)) {
-                                    System.out.print("Response: ");
-                                }
-                                if (accumulator.getDelta() != null && accumulator.getDelta().getTool_calls() != null) {
-                                    String jsonString = OBJECT_MAPPER.writeValueAsString(accumulator.getDelta().getTool_calls());
-                                    System.out.println("tool_calls: " + jsonString);
-                                }
-                                if (accumulator.getDelta() != null && accumulator.getDelta().getContent() != null) {
-                                    System.out.print(accumulator.getDelta().getContent());
-                                }
-                                sink.next();
-                            }
-                        })
-                        .doOnComplete(() -> sink.complete())
-                        .lastElement()
-                        .blockingGet();
-
-                Choice choice = new Choice(chatMessageAccumulator.getChoice().getFinishReason(), 0L, chatMessageAccumulator.getDelta());
-                List<Choice> choices = new ArrayList<>();
-                choices.add(choice);
-                ModelData data = new ModelData();
-                data.setChoices(choices);
-                data.setUsage(chatMessageAccumulator.getUsage());
-                data.setId(chatMessageAccumulator.getId());
-                data.setCreated(chatMessageAccumulator.getCreated());
-                data.setRequestId(request.getRequestId());
-                sseModelApiResp.setFlowable(null);
-                sseModelApiResp.setData(data);
-
-
-
+                return convertFlowableToFlux(sseModelApiResp.getFlowable());
             }
-            System.out.println("model output:" + JSON.toJSONString(sseModelApiResp));
+            return Flux.error(new IllegalStateException("Failed to call Zhipu AI chat API: " + sseModelApiResp.getMsg()));
+        });
+    }
 
-            // For chunked responses, only the first chunk contains the choice role.
-            // The rest of the chunks with same ID share the same role.
-            ConcurrentHashMap<String, String> roleMap = new ConcurrentHashMap<>();
+    public Flux<ChatResponse> convertFlowableToFlux(Flowable<ModelData> flowable) {
+        return Flux.create(sink -> {
+            flowable.subscribe(new FlowableSubscriber<>() {
+                @Override
+                public void onSubscribe(Subscription s) {
+                    s.request(Long.MAX_VALUE);
+                }
 
-            return completionChunks.getFlowable().map(chunk -> toChatCompletion(chunk)).map(chatCompletion -> {
+                @Override
+                public void onNext(ModelData modelData) {
+                    ChatMessageAccumulator accumulator = mapStreamToAccumulator(Flowable.just(modelData)).blockingFirst();
+                    sink.next(toChatCompletion(accumulator));
+                }
 
-                chatCompletion = handleFunctionCallOrReturn(request, ResponseEntity.of(Optional.of(chatCompletion)))
-                        .getBody();
+                @Override
+                public void onError(Throwable t) {
+                    sink.error(t);
+                }
 
-                @SuppressWarnings("null")
-                String id = chatCompletion.id();
-
-                List<Generation> generations = chatCompletion.choices().stream().map(choice -> {
-                    if (choice.message().role() != null) {
-                        roleMap.putIfAbsent(id, choice.message().role().name());
-                    }
-                    String finish = (choice.finishReason() != null ? choice.finishReason().name() : "");
-                    var generation = new Generation(choice.message().content(),
-                            Map.of("id", id, "role", roleMap.get(id), "finishReason", finish));
-                    if (choice.finishReason() != null) {
-                        generation = generation
-                                .withGenerationMetadata(ChatGenerationMetadata.from(choice.finishReason().name(), null));
-                    }
-                    return generation;
-                }).toList();
-                return new ChatResponse(generations);
+                @Override
+                public void onComplete() {
+                    sink.complete();
+                }
             });
-        }));
+        });
     }
 
     private Flowable<ChatMessageAccumulator> mapStreamToAccumulator(Flowable<ModelData> flowable) {
-        return flowable.map(chunk -> new ChatMessageAccumulator(chunk.getChoices().get(0).getDelta(), null, chunk.getChoices().get(0), chunk.getUsage(), chunk.getCreated(), chunk.getId()));
+        return flowable.map(chunk -> {
+            // 从ModelData中获取必要的信息
+            Choice choice = chunk.getChoices().get(0);
+            Delta delta = choice.getDelta();
+            Usage usage = chunk.getUsage();
+            Long created = chunk.getCreated();
+            String id = chunk.getId();
+
+            // 创建并返回一个新的ChatMessageAccumulator对象
+            return new ChatMessageAccumulator(delta, null, choice, usage, created, id);
+        });
     }
 
-    private ChatMessageAccumulator toChatCompletion(ModelData chunk) {
-        List<ModelApiResponse.Choice> choices = chunk.getChoices()
-                .stream()
-                .map(cc -> new ModelApiResponse.Choice(cc.index(), cc.delta(), cc.finishReason()))
-                .toList();
-
-        return new ModelApiResponse(chunk.id(), "chat.completion", chunk.created(), chunk.model(), choices, chunk.requestId(),null);
+    private ChatResponse toChatCompletion(ChatMessageAccumulator accumulator) {
+        List<Generation> generations = new ArrayList<>();
+        if (accumulator.getChoice() != null) {
+            Choice choice = accumulator.getChoice();
+            String finish = (choice.getFinishReason() != null ? choice.getFinishReason() : "");
+            var generation = new Generation(Objects.toString(choice.getMessage().getContent()),
+                    Map.of("id", accumulator.getId(), "role",
+                            accumulator.getChoice().getMessage().getRole(), "finishReason", finish));
+            if (choice.getFinishReason() != null) {
+                generation = generation.withGenerationMetadata(ChatGenerationMetadata.from(choice.getFinishReason(), null));
+            }
+            generations.add(generation);
+        }
+        return new ChatResponse(generations);
     }
 
     /**
@@ -306,8 +273,8 @@ public class ZhipuAiChatClient
     //
     @Override
     protected ChatCompletionRequest doCreateToolResponseRequest(ChatCompletionRequest previousRequest,
-                                                                           ChatMessage responseMessage,
-                                                                           List<ChatMessage> conversationHistory) {
+                                                                ChatMessage responseMessage,
+                                                                List<ChatMessage> conversationHistory) {
 
         // Every tool-call item requires a separate function call and a response (TOOL)
         // message.
@@ -329,7 +296,11 @@ public class ZhipuAiChatClient
 
         // Recursively call chatCompletionWithTools until the model doesn't call a
         // functions anymore.
-        ChatCompletionRequest newRequest = new ChatCompletionRequest(previousRequest.getRequestId(), conversationHistory, false);
+        ChatCompletionRequest newRequest = new ChatCompletionRequest(previousRequest.getModel(), conversationHistory, previousRequest.getRequestId(),
+                previousRequest.getDoSample(), previousRequest.getStream(), previousRequest.getTemperature(),
+                previousRequest.getTopP(), previousRequest.getMaxTokens(), previousRequest.getStop(),
+                previousRequest.getSensitiveWordCheck(), previousRequest.getTools(), previousRequest.getToolChoice(), previousRequest.getInvokeMethod() );
+
         newRequest = ModelOptionsUtils.merge(newRequest, previousRequest, ChatCompletionRequest.class);
 
         return newRequest;
@@ -342,220 +313,33 @@ public class ZhipuAiChatClient
 
     @SuppressWarnings("null")
     @Override
-    protected ChatMessage doGetToolResponseMessage(ResponseEntity<ModelApiResponse> chatCompletion) {
-        return chatCompletion.getBody().getData().getChoices().iterator().next().getMessage();
+    protected ChatMessage doGetToolResponseMessage(ResponseEntity<ModelData> chatCompletion) {
+        return chatCompletion.getBody().getChoices().iterator().next().getMessage();
     }
 
     @Override
-    protected ResponseEntity<ModelApiResponse> doChatCompletion(ChatCompletionRequest request) {
+    protected ResponseEntity<ModelData> doChatCompletion(ChatCompletionRequest request) {
         ModelApiResponse invokeModelApiResp = zhipuClient.invokeModelApi(request);
-        return ResponseEntity.ofNullable(invokeModelApiResp);
+        if(invokeModelApiResp.isSuccess()) {
+            return ResponseEntity.ofNullable(invokeModelApiResp.getData());
+        }
+        return ResponseEntity.ofNullable(null);
     }
 
     @Override
-    protected boolean isToolFunctionCall(ResponseEntity<ModelApiResponse> chatCompletion) {
+    protected boolean isToolFunctionCall(ResponseEntity<ModelData> chatCompletion) {
 
         var body = chatCompletion.getBody();
         if (body == null) {
             return false;
         }
 
-        var choices = body.getData().getChoices();
+        var choices = body.getChoices();
         if (CollectionUtils.isEmpty(choices)) {
             return false;
         }
 
         return !CollectionUtils.isEmpty(choices.get(0).getMessage().getTool_calls());
-    }
-
-    static final class FlowableAsFlux<T> extends Flux<T> implements Fuseable {
-
-        final Flowable<T> source;
-
-        public FlowableAsFlux(Flowable<T> source) {
-            this.source = source;
-        }
-
-        @Override
-        public void subscribe(CoreSubscriber<? super T> s) {
-            if (s instanceof ConditionalSubscriber) {
-                source.subscribe(new FlowableAsFlux.FlowableAsFluxConditionalSubscriber<>((ConditionalSubscriber<? super T>)s));
-            } else {
-                source.subscribe(new FlowableAsFlux.FlowableAsFluxSubscriber<>(s));
-            }
-        }
-
-        static final class FlowableAsFluxSubscriber<T> implements FlowableSubscriber<T>, QueueSubscription<T> {
-
-            final Subscriber<? super T> actual;
-
-            Subscription s;
-
-            io.reactivex.internal.fuseable.QueueSubscription<T> qs;
-
-            public FlowableAsFluxSubscriber(Subscriber<? super T> actual) {
-                this.actual = actual;
-            }
-
-            @SuppressWarnings("unchecked")
-            @Override
-            public void onSubscribe(Subscription s) {
-                if (Operators.validate(this.s, s)) {
-                    this.s = s;
-                    if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
-                        this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
-                    }
-
-                    actual.onSubscribe(this);
-                }
-            }
-
-            @Override
-            public void onNext(T t) {
-                actual.onNext(t);
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                actual.onError(t);
-            }
-
-            @Override
-            public void onComplete() {
-                actual.onComplete();
-            }
-
-            @Override
-            public void request(long n) {
-                s.request(n);
-            }
-
-            @Override
-            public void cancel() {
-                s.cancel();
-            }
-
-            @Override
-            public T poll() {
-                try {
-                    return qs.poll();
-                } catch (Throwable ex) {
-                    throw Exceptions.bubble(ex);
-                }
-            }
-
-            @Override
-            public int size() {
-                return 0; // not supported
-            }
-
-            @Override
-            public boolean isEmpty() {
-                return qs.isEmpty();
-            }
-
-            @Override
-            public void clear() {
-                qs.clear();
-            }
-
-            @Override
-            public int requestFusion(int requestedMode) {
-                if (qs != null) {
-                    return qs.requestFusion(requestedMode);
-                }
-                return NONE;
-            }
-        }
-
-        static final class FlowableAsFluxConditionalSubscriber<T> implements
-                io.reactivex.internal.fuseable.ConditionalSubscriber<T>, QueueSubscription<T> {
-
-            final ConditionalSubscriber<? super T> actual;
-
-            Subscription s;
-
-            io.reactivex.internal.fuseable.QueueSubscription<T> qs;
-
-            public FlowableAsFluxConditionalSubscriber(ConditionalSubscriber<? super T> actual) {
-                this.actual = actual;
-            }
-
-            @SuppressWarnings("unchecked")
-            @Override
-            public void onSubscribe(Subscription s) {
-                if (Operators.validate(this.s, s)) {
-                    this.s = s;
-                    if (s instanceof io.reactivex.internal.fuseable.QueueSubscription) {
-                        this.qs = (io.reactivex.internal.fuseable.QueueSubscription<T>)s;
-                    }
-
-                    actual.onSubscribe(this);
-                }
-            }
-
-            @Override
-            public void onNext(T t) {
-                actual.onNext(t);
-            }
-
-            @Override
-            public boolean tryOnNext(T t) {
-                return actual.tryOnNext(t);
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                actual.onError(t);
-            }
-
-            @Override
-            public void onComplete() {
-                actual.onComplete();
-            }
-
-            @Override
-            public void request(long n) {
-                s.request(n);
-            }
-
-            @Override
-            public void cancel() {
-                s.cancel();
-            }
-
-            @Override
-            public T poll() {
-                try {
-                    return qs.poll();
-                } catch (Throwable ex) {
-                    throw Exceptions.bubble(ex);
-                }
-            }
-
-            @Override
-            public int size() {
-                return 0; // not supported
-            }
-
-            @Override
-            public boolean isEmpty() {
-                return qs.isEmpty();
-            }
-
-            @Override
-            public void clear() {
-                qs.clear();
-            }
-
-            @Override
-            public int requestFusion(int requestedMode) {
-                if (qs != null) {
-                    return qs.requestFusion(requestedMode);
-                }
-                return NONE;
-            }
-        }
     }
 
 }
