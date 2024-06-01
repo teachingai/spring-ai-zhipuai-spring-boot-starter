@@ -2,7 +2,6 @@ package org.springframework.ai.zhipuai.metadata;
 
 import com.zhipu.oapi.service.v4.image.ImageResult;
 import org.springframework.ai.image.ImageResponseMetadata;
-import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
 import org.springframework.util.Assert;
 
 import java.util.Objects;

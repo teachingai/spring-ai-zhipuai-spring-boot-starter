@@ -1,5 +1,6 @@
 package org.springframework.ai.zhipuai.aot;
 
+import com.zhipu.oapi.ClientV4;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
@@ -12,7 +13,7 @@ public class ZhipuAiRuntimeHints implements RuntimeHintsRegistrar {
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
         var mcs = MemberCategory.values();
-        for (var tr : findJsonAnnotatedClassesInPackage(ZhipuAiApi.class)) {
+        for (var tr : findJsonAnnotatedClassesInPackage(ClientV4.class)) {
             hints.reflection().registerType(tr, mcs);
         }
         for (var tr : findJsonAnnotatedClassesInPackage(ZhipuAiChatOptions.class)) {
