@@ -1,6 +1,6 @@
 package org.springframework.ai.zhipuai.autoconfigure;
 
-import org.springframework.ai.zhipuai.api.ZhipuAiImageApi;
+import com.zhipu.oapi.Constants;
 import org.springframework.ai.zhipuai.api.ZhipuAiImageOptions;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 @ConfigurationProperties(ZhipuAiImageProperties.CONFIG_PREFIX)
 public class ZhipuAiImageProperties extends ZhipuAiParentProperties {
 
-    public static final String CONFIG_PREFIX = "spring.ai.zhipuai.embedding";
+    public static final String CONFIG_PREFIX = "spring.ai.zhipuai.image";
 
     /**
      * Enable 智普AI image client.
@@ -22,7 +22,7 @@ public class ZhipuAiImageProperties extends ZhipuAiParentProperties {
      */
     @NestedConfigurationProperty
     private ZhipuAiImageOptions options = ZhipuAiImageOptions.builder()
-            .withModel(ZhipuAiImageApi.ImageModel.COGVIEW_3.getValue())
+            .withModel(Constants.ModelCogView)
             .build();
 
     public ZhipuAiImageOptions getOptions() {
