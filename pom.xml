@@ -458,14 +458,20 @@
 		<dependency>
 			<groupId>cn.bigmodel.openapi</groupId>
 			<artifactId>oapi-java-sdk</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>io.reactivex.rxjava2</groupId>
+					<artifactId>rxjava</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.data</groupId>
 			<artifactId>spring-data-redis</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>io.projectreactor.addons</groupId>
-			<artifactId>reactor-adapter</artifactId>
+			<groupId>io.reactivex.rxjava2</groupId>
+			<artifactId>rxjava</artifactId>
 		</dependency>
 	</dependencies>
 

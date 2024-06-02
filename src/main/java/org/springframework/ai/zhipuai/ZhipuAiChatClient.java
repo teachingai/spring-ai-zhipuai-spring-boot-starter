@@ -25,6 +25,7 @@ import org.springframework.ai.model.function.FunctionCallbackContext;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.ai.zhipuai.api.ZhipuAiChatOptions;
 import org.springframework.ai.zhipuai.util.ApiUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
@@ -87,14 +88,14 @@ public class ZhipuAiChatClient
     public ChatResponse call(Prompt prompt) {
         // 1、创建请求
         String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
-        var request = this.createRequest(prompt, requestId, false, Constants.invokeMethodAsync);
+        var request = this.createRequest(prompt, requestId, false, Constants.invokeMethod);
         // 2、执行请求
         return retryTemplate.execute(ctx -> {
             // 3、调用智能聊天接口
             ResponseEntity<ModelData> completionEntity = this.callWithFunctionSupport(request);
 
             var chatCompletion = completionEntity.getBody();
-            if (chatCompletion == null) {
+            if (chatCompletion == null || CollectionUtils.isEmpty(chatCompletion.getChoices())) {
                 log.warn("No chat completion returned for prompt: {}", prompt);
                 return new ChatResponse(List.of());
             }
@@ -205,7 +206,7 @@ public class ZhipuAiChatClient
 
         var chatCompletionMessages = prompt.getInstructions()
                 .stream()
-                .map(m -> new ChatMessage(m.getMessageType().name(), m.getContent()))
+                .map(m -> new ChatMessage(m.getMessageType().getValue(), m.getContent()))
                 .toList();
 
         var chatCompletionRequest = ChatCompletionRequest.builder()
@@ -221,25 +222,23 @@ public class ZhipuAiChatClient
         if (this.defaultOptions != null) {
             Set<String> defaultEnabledFunctions = super.handleFunctionCallbackConfigurations(this.defaultOptions, !IS_RUNTIME_CALL);
             functionsForThisRequest.addAll(defaultEnabledFunctions);
-            chatCompletionRequest = ModelOptionsUtils.merge(chatCompletionRequest, this.defaultOptions, ChatCompletionRequest.class);
+            BeanUtils.copyProperties(this.defaultOptions, chatCompletionRequest);
         }
         // Add the prompt enabled functions to the request's tools parameter.
         if (prompt.getOptions() != null) {
             if (prompt.getOptions() instanceof ChatOptions runtimeOptions) {
-
                 var updatedRuntimeOptions = ModelOptionsUtils.copyToTarget(runtimeOptions, ChatOptions.class, ZhipuAiChatOptions.class);
                 Set<String> promptEnabledFunctions = this.handleFunctionCallbackConfigurations(updatedRuntimeOptions, IS_RUNTIME_CALL);
                 functionsForThisRequest.addAll(promptEnabledFunctions);
-                chatCompletionRequest = ModelOptionsUtils.merge(updatedRuntimeOptions, chatCompletionRequest, ChatCompletionRequest.class);
+                BeanUtils.copyProperties(updatedRuntimeOptions, chatCompletionRequest);
             } else {
                 throw new IllegalArgumentException("Prompt options are not of type ChatOptions: " + prompt.getOptions().getClass().getSimpleName());
             }
         }
         // Add the enabled functions definitions to the request's tools parameter.
         if (!CollectionUtils.isEmpty(functionsForThisRequest)) {
-            chatCompletionRequest = ModelOptionsUtils.merge(
-                    ZhipuAiChatOptions.builder().withTools(this.getFunctionTools(functionsForThisRequest)).build(),
-                    chatCompletionRequest, ChatCompletionRequest.class);
+            BeanUtils.copyProperties(
+                    ZhipuAiChatOptions.builder().withTools(this.getFunctionTools(functionsForThisRequest)).build(), chatCompletionRequest);
         }
 
         return chatCompletionRequest;
